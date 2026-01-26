@@ -4,7 +4,7 @@ A comprehensive retirement planning calculator that projects portfolio growth, s
 
 ✨Vibe✨ coded with Claude -- check results manually for accuracy.
 
-Hosted at: [https://mjcrepeau.github.io/retirement-planner/](https://mjcrepeau.github.io/retirement-planner/)
+Hosted at: [https://alanwangvt.github.io/retirement-planner/](https://alanwangvt.github.io/retirement-planner/)
 
 ![Dashboard showing retirement account totals, income, etc.](screenshots/dashboard.png "Main dashboard")
 

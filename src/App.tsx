@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Account, Profile, Assumptions } from './types';
 import { DEFAULT_PROFILE, DEFAULT_ASSUMPTIONS } from './utils/constants';
 import { useRetirementCalc } from './hooks/useRetirementCalc';
@@ -6,6 +6,7 @@ import { useLocalStorage, useDarkMode } from './hooks/useLocalStorage';
 import { CountryProvider, useCountry } from './contexts/CountryContext';
 import { getCountryConfig, type CountryCode } from './countries';
 import { Layout } from './components/Layout';
+import { HomePage } from './components/HomePage';
 import { AccountList } from './components/AccountList';
 import { ProfileForm } from './components/ProfileForm';
 import { AssumptionsForm } from './components/AssumptionsForm';
@@ -19,6 +20,14 @@ import { MethodologyPanel } from './components/MethodologyPanel';
 import { DataTableAccumulation } from './components/DataTableAccumulation';
 import { DataTableWithdrawal } from './components/DataTableWithdrawal';
 import { v4 as uuidv4 } from 'uuid';
+import { auth } from './firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import {
+  saveAccountsToFirebase,
+  saveProfileToFirebase,
+  saveAssumptionsToFirebase,
+  loadAllUserDataFromFirebase,
+} from './utils/firebaseSync';
 
 // Default accounts for US
 const createUSDefaultAccounts = (): Account[] => [
@@ -97,7 +106,80 @@ function AppContent() {
   // Dark mode
   const [isDarkMode, toggleDarkMode] = useDarkMode();
 
-  // UI state (not persisted)
+  // Auth state
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
+
+  // Listen for auth state changes and load Firebase data
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      
+      if (currentUser) {
+        // User logged in - load data from Firebase
+        setDataLoading(true);
+        try {
+          const { accounts: fbAccounts, profile: fbProfile, assumptions: fbAssumptions } = 
+            await loadAllUserDataFromFirebase(currentUser.uid);
+          
+          // Override localStorage with Firebase data if it exists
+          if (fbAccounts) setAccounts(fbAccounts);
+          if (fbProfile) setProfile(fbProfile);
+          if (fbAssumptions) setAssumptions(fbAssumptions);
+        } catch (error) {
+          console.error('Error loading user data from Firebase:', error);
+        } finally {
+          setDataLoading(false);
+        }
+      }
+      
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Sync accounts to Firebase when accounts change and user is logged in
+  useEffect(() => {
+    if (user && accounts.length > 0) {
+      const syncAccounts = async () => {
+        try {
+          await saveAccountsToFirebase(user.uid, accounts);
+        } catch (error) {
+          console.error('Error syncing accounts:', error);
+        }
+      };
+      syncAccounts();
+    }
+  }, [user, accounts]);
+
+  // Sync profile to Firebase when profile changes and user is logged in
+  useEffect(() => {
+    if (user && profile) {
+      const syncProfile = async () => {
+        try {
+          await saveProfileToFirebase(user.uid, profile);
+        } catch (error) {
+          console.error('Error syncing profile:', error);
+        }
+      };
+      syncProfile();
+    }
+  }, [user, profile]);
+
+  // Sync assumptions to Firebase when assumptions change and user is logged in
+  useEffect(() => {
+    if (user && assumptions) {
+      const syncAssumptions = async () => {
+        try {
+          await saveAssumptionsToFirebase(user.uid, assumptions);
+        } catch (error) {
+          console.error('Error syncing assumptions:', error);
+        }
+      };
+      syncAssumptions();
+    }
+  }, [user, assumptions]);
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [expandedSection, setExpandedSection] = useState<string | null>('accounts');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -152,6 +234,17 @@ function AppContent() {
       onToggleDarkMode={toggleDarkMode}
       onReset={handleReset}
     >
+      {authLoading || dataLoading ? (
+        // Loading state
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-600 dark:text-gray-300">Loading...</div>
+        </div>
+      ) : !user ? (
+        // Not logged in - show home page
+        <HomePage />
+      ) : (
+        // Logged in - show full dashboard
+        <>
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -384,6 +477,8 @@ function AppContent() {
           )}
         </div>
       </div>
+        </>
+      )}
     </Layout>
   );
 }
