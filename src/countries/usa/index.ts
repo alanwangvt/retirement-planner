@@ -8,8 +8,8 @@ import { CHART_COLORS } from '../../utils/constants';
 
 const US_ACCOUNT_TYPES: AccountTypeConfig[] = [
   {
-    type: 'traditional_401k',
-    label: 'Traditional 401(k)',
+    type: 'traditional_401k_403b',
+    label: 'Traditional 401(k)/403(b)',
     taxTreatment: 'pretax',
     description: 'Employer-sponsored retirement account with pre-tax contributions',
   },
@@ -47,7 +47,7 @@ const US_ACCOUNT_TYPES: AccountTypeConfig[] = [
 
 // Withdrawal priority for USA tax optimization
 const USA_WITHDRAWAL_ORDER = [
-  'traditional_401k', // RMDs first
+  'traditional_401k_403b', // RMDs first
   'traditional_ira',
   'taxable', // Then taxable (favorable cap gains)
   'roth_401k', // Preserve Roth
@@ -61,7 +61,7 @@ const USA_ACCOUNT_GROUPS: AccountGroup[] = [
     id: 'traditional',
     label: 'Traditional Accounts',
     color: CHART_COLORS.pretax,
-    accountTypes: ['traditional_401k', 'traditional_ira'],
+    accountTypes: ['traditional_401k_403b', 'traditional_ira'],
     description: 'Pre-tax contributions, taxed on withdrawal',
   },
   {
@@ -142,7 +142,7 @@ export const USConfig: CountryConfig = {
   }),
 
   getContributionLimits: (): ContributionLimits => ({
-    traditional_401k: 23000, // 2024 limit
+    traditional_401k_403b: 23000, // 2024 limit
     roth_401k: 23000,
     traditional_ira: 7000,
     roth_ira: 7000,
@@ -157,11 +157,11 @@ export const USConfig: CountryConfig = {
   },
 
   isTraditionalAccount: (accountType: string): boolean => {
-    return accountType === 'traditional_401k' || accountType === 'traditional_ira';
+    return accountType === 'traditional_401k_403b' || accountType === 'traditional_ira';
   },
 
   supportsEmployerMatch: (accountType: string): boolean => {
-    return accountType === 'traditional_401k' || accountType === 'roth_401k';
+    return accountType === 'traditional_401k_403b' || accountType === 'roth_401k';
   },
 
   getAccountGroupings: (): AccountGroup[] => {

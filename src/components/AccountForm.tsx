@@ -13,7 +13,7 @@ interface AccountFormProps {
 
 const defaultAccount: Omit<Account, 'id'> = {
   name: '',
-  type: 'traditional_401k',
+  type: 'traditional_401k_403b',
   balance: 0,
   annualContribution: 0,
   contributionGrowthRate: 0.03,
@@ -34,7 +34,7 @@ export function AccountForm({ account, onSave, onCancel }: AccountFormProps) {
       return rest;
     }
     // Use first account type from country config as default
-    const defaultType = countryConfig.accountTypes[0]?.type || 'traditional_401k';
+    const defaultType = countryConfig.accountTypes[0]?.type || 'traditional_401k_403b';
     return { ...defaultAccount, type: defaultType as AccountType };
   });
 

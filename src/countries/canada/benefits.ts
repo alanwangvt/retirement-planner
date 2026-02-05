@@ -95,7 +95,7 @@ export function calculateCanadianRetirementBenefits(
     currentAge >= profile.socialSecurityStartAge
   ) {
     const cppStartAge = profile.socialSecurityStartAge;
-    const baseMonthly = profile.socialSecurityBenefit / 12; // Assume stored as annual
+    const baseMonthly = profile.socialSecurityBenefit; // Stored as monthly at start age
     const adjustedMonthly = calculateCPPAdjustment(cppStartAge, baseMonthly);
 
     benefits.push({

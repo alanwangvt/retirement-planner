@@ -111,6 +111,14 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
                 <dt className="text-gray-600 dark:text-gray-400">Retirement Return Rate</dt>
                 <dd className="font-mono text-gray-900 dark:text-white">{formatPercent(assumptions.retirementReturnRate)}</dd>
               </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-600 dark:text-gray-400">Annual Roth Conversion</dt>
+                <dd className="font-mono text-gray-900 dark:text-white">{formatCurrency(assumptions.rothConversionAnnualAmount ?? 0, currency)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-600 dark:text-gray-400">Target Marginal Tax Rate</dt>
+                <dd className="font-mono text-gray-900 dark:text-white">{formatPercent(assumptions.targetMarginalTaxRate ?? 0)}</dd>
+              </div>
             </dl>
           </div>
           <div className="space-y-3">
@@ -262,7 +270,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
                 <div>
                   <strong className="text-gray-800 dark:text-gray-200">Fill 12% Tax Bracket</strong>
                   <p className="text-gray-600 dark:text-gray-400">
-                    Additional traditional withdrawals to fill the 12% bracket (up to {formatCurrency(standardDeduction + (isMarried ? 94300 : 47150))} total ordinary income).
+                    Additional traditional withdrawals to fill the 12% bracket (up to {formatCurrency(standardDeduction + (isMarried ? 96950 : 48475))} total ordinary income).
                   </p>
                 </div>
               </li>
@@ -394,7 +402,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           {isCanada
             ? '2024 Canadian Federal Tax Brackets'
-            : `2024 Federal Tax Brackets (${isMarried ? 'Married Filing Jointly' : 'Single'})`
+            : `2025 Federal Tax Brackets (${isMarried ? 'Married Filing Jointly' : 'Single'})`
           }
         </h3>
         <div className="overflow-x-auto">
@@ -465,7 +473,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
       {!isCanada && (
         <section className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            2024 Long-Term Capital Gains Rates ({isMarried ? 'Married Filing Jointly' : 'Single'})
+            2025 Long-Term Capital Gains Rates ({isMarried ? 'Married Filing Jointly' : 'Single'})
           </h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -603,9 +611,9 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
               <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">Social Security</h4>
               <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                <li>• Your benefit: {formatCurrency(profile.socialSecurityBenefit || 0)}/year (in today's dollars)</li>
+                <li>• Your benefit: {formatCurrency(profile.socialSecurityBenefit || 0)}/mo (at start age)</li>
                 <li>• Start age: {profile.socialSecurityStartAge || 67}</li>
-                <li>• Benefits are inflation-adjusted annually</li>
+                <li>• Benefits are inflation-adjusted from start age onwards</li>
                 <li>• Up to 85% of benefits are taxable depending on income</li>
                 <li>• Calculator assumes 85% taxable (maximum rate)</li>
               </ul>
@@ -622,7 +630,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
         <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
           <li className="flex gap-2">
             <span className="flex-shrink-0">*</span>
-            <span>Tax brackets are for 2024 and don't adjust for inflation in future years.</span>
+            <span>Tax brackets are for 2025 and don't adjust for inflation in future years.</span>
           </li>
           {isCanada ? (
             <>

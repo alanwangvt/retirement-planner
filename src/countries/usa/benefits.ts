@@ -19,10 +19,11 @@ export function calculateSocialSecurityBenefits(
     profile.socialSecurityStartAge &&
     currentAge >= profile.socialSecurityStartAge
   ) {
-    const annualBenefit = profile.socialSecurityBenefit;
+    const monthlyBenefit = profile.socialSecurityBenefit; // stored as monthly at start age
+    const annualBenefit = monthlyBenefit * 12;
     benefits.push({
       age: currentAge,
-      monthlyAmount: annualBenefit / 12,
+      monthlyAmount: monthlyBenefit,
       annualAmount: annualBenefit,
     });
   }

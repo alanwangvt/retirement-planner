@@ -10,6 +10,7 @@ import { HomePage } from './components/HomePage';
 import { AccountList } from './components/AccountList';
 import { ProfileForm } from './components/ProfileForm';
 import { AssumptionsForm } from './components/AssumptionsForm';
+import { RothConversionForm } from './components/RothConversionForm';
 import { SummaryCards } from './components/SummaryCards';
 import { ChartAccumulation } from './components/ChartAccumulation';
 import { ChartDrawdown } from './components/ChartDrawdown';
@@ -34,7 +35,7 @@ const createUSDefaultAccounts = (): Account[] => [
   {
     id: uuidv4(),
     name: 'Company 401(k)',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 150000,
     annualContribution: 15000,
     contributionGrowthRate: 0.03,
@@ -82,6 +83,17 @@ const createDefaultAccounts = (country: CountryCode = 'US'): Account[] => {
   return country === 'CA' ? createCADefaultAccounts() : createUSDefaultAccounts();
 };
 
+// Migrate old account types to new ones
+const migrateAccountTypes = (accounts: Account[]): Account[] => {
+  return accounts.map(account => {
+    // @ts-ignore - handle old account types
+    if (account.type === 'traditional_401k') {
+      return { ...account, type: 'traditional_401k_403b' as any };
+    }
+    return account;
+  });
+};
+
 type TabType = 'accumulation' | 'retirement' | 'summary' | 'methodology';
 
 // Inner app component that uses the country context
@@ -90,10 +102,21 @@ function AppContent() {
   const { config: countryConfig } = useCountry();
 
   // Use localStorage for persistence
-  const [accounts, setAccounts, resetAccounts] = useLocalStorage<Account[]>(
+  const [accountsRaw, setAccountsRaw, resetAccounts] = useLocalStorage<Account[]>(
     'retirement-planner-accounts',
     createDefaultAccounts()
   );
+  
+  // Migrate old account types
+  const accounts = migrateAccountTypes(accountsRaw);
+  const setAccounts = useCallback((value: Account[] | ((prev: Account[]) => Account[])) => {
+    if (typeof value === 'function') {
+      setAccountsRaw((prev: Account[]) => value(migrateAccountTypes(prev)));
+    } else {
+      setAccountsRaw(value);
+    }
+  }, [setAccountsRaw]);
+  
   const [profile, setProfile, resetProfile] = useLocalStorage<Profile>(
     'retirement-planner-profile',
     DEFAULT_PROFILE
@@ -123,8 +146,8 @@ function AppContent() {
           const { accounts: fbAccounts, profile: fbProfile, assumptions: fbAssumptions } = 
             await loadAllUserDataFromFirebase(currentUser.uid);
           
-          // Override localStorage with Firebase data if it exists
-          if (fbAccounts) setAccounts(fbAccounts);
+          // Override localStorage with Firebase data if it exists, and migrate old types
+          if (fbAccounts) setAccounts(migrateAccountTypes(fbAccounts));
           if (fbProfile) setProfile(fbProfile);
           if (fbAssumptions) setAssumptions(fbAssumptions);
         } catch (error) {
@@ -181,7 +204,7 @@ function AppContent() {
     }
   }, [user, assumptions]);
   const [activeTab, setActiveTab] = useState<TabType>('summary');
-  const [expandedSection, setExpandedSection] = useState<string | null>('accounts');
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const { accumulation, retirement } = useRetirementCalc(accounts, profile, assumptions, countryConfig);
@@ -356,6 +379,34 @@ function AppContent() {
               </div>
             )}
           </div>
+
+          {/* Roth Conversion Assumptions */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => toggleSection('roth')}
+              className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+            >
+              <span className="font-medium text-gray-900 dark:text-white">Roth Conversion Assumptions</span>
+              <svg
+                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+                  expandedSection === 'roth' ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {expandedSection === 'roth' && (
+              <div className="px-4 pb-4">
+                <RothConversionForm
+                  assumptions={assumptions}
+                  onChange={setAssumptions}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Panel - Charts and Results */}
@@ -465,7 +516,7 @@ function AppContent() {
                     <ChartTax result={retirement} isDarkMode={isDarkMode} />
                   </div>
 
-                  <DataTableWithdrawal accounts={accounts} result={retirement} />
+                  <DataTableWithdrawal accounts={accounts} result={retirement} profile={profile} />
                 </div>
               )}
 

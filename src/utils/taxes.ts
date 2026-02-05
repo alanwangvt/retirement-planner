@@ -1,4 +1,4 @@
-import { FilingStatus, TaxBracket } from '../types';
+import { FilingStatus, TaxBracket, IRMAAThreshold } from '../types';
 import {
   TAX_BRACKETS_MFJ,
   TAX_BRACKETS_SINGLE,
@@ -7,6 +7,11 @@ import {
   CAPITAL_GAINS_BRACKETS_MFJ,
   CAPITAL_GAINS_BRACKETS_SINGLE,
 } from './constants';
+import {
+  IRMAA_THRESHOLDS_MFJ,
+  IRMAA_THRESHOLDS_SINGLE,
+  MEDICARE_START_AGE,
+} from '../countries/usa/constants';
 
 export function getTaxBrackets(filingStatus: FilingStatus): TaxBracket[] {
   return filingStatus === 'married_filing_jointly'
@@ -167,9 +172,9 @@ export function getWithdrawalToFillBracket(
   // If already past this bracket, return 0
   if (currentTaxable >= targetBracket.max) return 0;
 
-  // If below this bracket, include room from lower brackets
-  const startPoint = Math.max(currentTaxable, targetBracket.min);
-  const roomInBracket = targetBracket.max - startPoint;
+  // Calculate room from current position to top of target bracket
+  // This includes all intermediate brackets
+  const roomInBracket = targetBracket.max - currentTaxable;
 
   // If we're below the standard deduction, add that room too
   const deductionRoom = currentOrdinaryIncome < standardDeduction
@@ -188,4 +193,86 @@ export function getEffectiveTaxRate(
 ): number {
   if (grossIncome <= 0) return 0;
   return totalTax / grossIncome;
+}
+
+/**
+ * Get IRMAA thresholds based on filing status
+ */
+export function getIRMAAThresholds(filingStatus: FilingStatus): IRMAAThreshold[] {
+  return filingStatus === 'married_filing_jointly'
+    ? IRMAA_THRESHOLDS_MFJ
+    : IRMAA_THRESHOLDS_SINGLE;
+}
+
+/**
+ * Calculate room to next IRMAA threshold
+ * Returns how much income can be added before hitting next IRMAA tier
+ */
+export function getRoomToNextIRMAAThreshold(
+  currentMAGI: number,
+  filingStatus: FilingStatus
+): number {
+  const thresholds = getIRMAAThresholds(filingStatus);
+  
+  // Find current threshold
+  const currentThreshold = thresholds.find(t => currentMAGI >= t.min && currentMAGI < t.max);
+  if (!currentThreshold) {
+    // Already at max threshold
+    return 0;
+  }
+  
+  return currentThreshold.max - currentMAGI;
+}
+
+/**
+ * Get IRMAA surcharge for given MAGI
+ * Returns total annual surcharge (Part B + Part D) * 12 months
+ */
+export function getAnnualIRMAASurcharge(
+  magi: number,
+  filingStatus: FilingStatus
+): number {
+  const thresholds = getIRMAAThresholds(filingStatus);
+  
+  const threshold = thresholds.find(t => magi >= t.min && magi < t.max);
+  if (!threshold) {
+    // Use the highest threshold if beyond max
+    const maxThreshold = thresholds[thresholds.length - 1];
+    return (maxThreshold.partBSurcharge + maxThreshold.partDSurcharge) * 12;
+  }
+  
+  return (threshold.partBSurcharge + threshold.partDSurcharge) * 12;
+}
+
+/**
+ * Calculate distance to next IRMAA threshold and the surcharge impact
+ * Returns null if Medicare has not started yet
+ */
+export function getIRMAAProximity(
+  currentMAGI: number,
+  age: number,
+  filingStatus: FilingStatus
+): { distanceToNext: number; nextSurchargeAnnual: number } | null {
+  // IRMAA only matters if at or approaching Medicare age
+  if (age < MEDICARE_START_AGE - 2) return null;
+  
+  const thresholds = getIRMAAThresholds(filingStatus);
+  const currentThreshold = thresholds.find(t => currentMAGI >= t.min && currentMAGI < t.max);
+  
+  if (!currentThreshold) {
+    return { distanceToNext: 0, nextSurchargeAnnual: 0 };
+  }
+  
+  // Find the next threshold
+  const currentIndex = thresholds.indexOf(currentThreshold);
+  const nextThreshold = thresholds[currentIndex + 1];
+  
+  if (!nextThreshold) {
+    return { distanceToNext: Infinity, nextSurchargeAnnual: 0 };
+  }
+  
+  const distanceToNext = currentThreshold.max - currentMAGI;
+  const nextSurchargeAnnual = (nextThreshold.partBSurcharge + nextThreshold.partDSurcharge) * 12;
+  
+  return { distanceToNext, nextSurchargeAnnual };
 }

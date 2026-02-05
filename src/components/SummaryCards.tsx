@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AccumulationResult, RetirementResult, Profile, Assumptions } from '../types';
-import { STANDARD_DEDUCTION_MFJ, STANDARD_DEDUCTION_SINGLE } from '../utils/constants';
+import { STANDARD_DEDUCTION_MFJ, STANDARD_DEDUCTION_SINGLE, TAX_BRACKETS_MFJ, TAX_BRACKETS_SINGLE } from '../utils/constants';
 import { useCountry } from '../contexts/CountryContext';
 
 interface SummaryCardsProps {
@@ -364,10 +364,10 @@ export function SummaryCards({
           {profile.socialSecurityBenefit && profile.socialSecurityStartAge ? (
             <ExpandableStatCard
               title="Social Security"
-              value={formatCurrency(profile.socialSecurityBenefit)}
+              value={`${formatCurrency(profile.socialSecurityBenefit)}/mo`}
               subtitle={`Starting at age ${profile.socialSecurityStartAge}`}
               color="teal"
-              formula="Annual benefit in today's dollars, adjusted for inflation"
+              formula="Monthly benefit at start age, grows with inflation after start"
               details={
                 <div>
                   <p className="mb-1">
@@ -382,6 +382,91 @@ export function SummaryCards({
           ) : null}
         </div>
       </div>
+
+      {/* Roth Conversion Planning */}
+      {yearlyWithdrawals.length > 0 && assumptions.rothConversionStrategy === 'auto' && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Roth Conversion Planning</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Automatic conversions filling to {formatPercent(assumptions.rothConversionTargetRate ?? 0.22)} bracket or IRMAA limit (first 10 years):
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Age</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Ordinary Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Marginal Rate</th>
+                    <th className="text-right py-2 px-2 font-medium text-purple-600 dark:text-purple-400">Conversion</th>
+                    <th className="text-right py-2 px-2 font-medium text-blue-600 dark:text-blue-400">IRMAA Distance</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Strategy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {yearlyWithdrawals.slice(0, 10).map((yearData) => {
+                    const brackets = profile.filingStatus === 'married_filing_jointly' ? TAX_BRACKETS_MFJ : TAX_BRACKETS_SINGLE;
+                    const standardDeduction = profile.filingStatus === 'married_filing_jointly' ? STANDARD_DEDUCTION_MFJ : STANDARD_DEDUCTION_SINGLE;
+                    // Ordinary income before conversion
+                    const ordinaryIncomeBeforeConversion = yearData.traditionalWithdrawal + yearData.socialSecurityIncome * 0.85;
+                    // Including conversion
+                    const ordinaryIncome = ordinaryIncomeBeforeConversion + yearData.rothConversionAmount;
+                    const taxableIncome = Math.max(0, ordinaryIncome - standardDeduction);
+                    
+                    // Find current marginal bracket
+                    let currentBracket = brackets[0];
+                    for (const bracket of brackets) {
+                      if (taxableIncome <= bracket.max) {
+                        currentBracket = bracket;
+                        break;
+                      }
+                    }
+                    
+                    const targetRate = assumptions.rothConversionTargetRate ?? 0.22;
+
+                    return (
+                      <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="py-2 px-2 font-medium text-gray-900 dark:text-white">{yearData.age}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurrency(ordinaryIncome)}</td>
+                        <td className="py-2 px-2 text-right font-mono font-medium" style={{ color: currentBracket.rate <= targetRate ? '#10b981' : '#f59e0b' }}>
+                          {formatPercent(currentBracket.rate)}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-purple-600 dark:text-purple-400 font-medium">
+                          {yearData.rothConversionAmount > 0 ? formatCurrency(yearData.rothConversionAmount) : '-'}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">
+                          {yearData.irmaaThresholdDistance !== undefined && yearData.irmaaThresholdDistance > 0
+                            ? formatCurrency(yearData.irmaaThresholdDistance)
+                            : yearData.age >= 63 ? '$0' : 'N/A'}
+                        </td>
+                        <td className="py-2 px-2 text-left text-gray-600 dark:text-gray-400">
+                          {yearData.rothConversionReason || (yearData.rothConversionAmount > 0 ? 'Converting' : 'No conversion')}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 space-y-2 text-xs text-gray-600 dark:text-gray-400">
+              <p><strong>How automatic conversions work:</strong></p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><strong>Ordinary Income:</strong> Traditional withdrawals + 85% of Social Security + Roth conversions</li>
+                <li><strong>Marginal Rate:</strong> Your current tax bracket after conversions</li>
+                <li><strong>Conversion:</strong> Amount automatically converted from traditional to Roth IRA</li>
+                <li><strong>IRMAA Distance:</strong> Remaining room before triggering Medicare surcharges ($0 means at threshold)</li>
+                <li><strong>Strategy:</strong> Explains why this conversion amount was chosen</li>
+              </ul>
+              <p className="mt-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2">
+                <strong>IRMAA Protection:</strong> Conversions automatically stop before triggering Medicare Part B/D surcharges 
+                (starting at $106K single / $212K MFJ). Surcharges can add $70-$420/month for 2 years due to lookback period.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Warnings */}
       {portfolioDepletionAge && portfolioDepletionAge < profile.lifeExpectancy && (

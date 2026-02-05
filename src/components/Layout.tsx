@@ -359,7 +359,7 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <p className="text-sm text-gray-500 dark:text-gray-400 flex-1 text-center">
             This tool provides estimates only. Consult a financial advisor for personalized advice.
-            Tax calculations use 2024 federal brackets.
+            Tax calculations use 2025 federal brackets.
           </p>
           <a
             href="https://github.com/alanwangvt/retirement-planner"

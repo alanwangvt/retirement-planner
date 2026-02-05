@@ -3,7 +3,8 @@ export type CountryCode = 'US' | 'CA';
 
 // US Account Types
 export type USAccountType =
-  | 'traditional_401k'
+  | 'traditional_401k_403b'
+  | 'traditional_457b'
   | 'roth_401k'
   | 'traditional_ira'
   | 'roth_ira'
@@ -25,6 +26,8 @@ export type CAAccountType =
 export type AccountType = USAccountType | CAAccountType;
 
 export type FilingStatus = 'single' | 'married_filing_jointly';
+
+export type RothConversionStrategy = 'off' | 'auto';
 
 export type TaxTreatment = 'pretax' | 'roth' | 'taxable' | 'hsa';
 
@@ -49,7 +52,7 @@ export interface Profile {
   filingStatus?: FilingStatus; // US only
   stateTaxRate?: number; // US only (as decimal), CA uses province
   annualIncome?: number; // For CA RRSP contribution room calculation
-  socialSecurityBenefit?: number; // CPP for CA, Social Security for US (annual)
+  socialSecurityBenefit?: number; // CPP for CA, Social Security for US (monthly at start age)
   socialSecurityStartAge?: number; // CPP/SS start age
   secondaryBenefitStartAge?: number; // OAS for CA
   secondaryBenefitAmount?: number; // OAS amount for CA
@@ -59,6 +62,9 @@ export interface Assumptions {
   inflationRate: number; // as decimal
   safeWithdrawalRate: number; // as decimal
   retirementReturnRate: number; // as decimal
+  rothConversionStrategy?: RothConversionStrategy; // 'off' or 'auto' - auto fills to bracket/IRMAA limit
+  rothConversionTargetRate?: number; // target marginal tax rate (e.g., 0.12, 0.22, 0.24)
+  annualSpendingAtRetirement?: number; // user-specified annual spending at retirement start
 }
 
 export interface YearlyAccountBalance {
@@ -82,6 +88,10 @@ export interface YearlyWithdrawal {
   withdrawals: Record<string, number>; // accountId -> withdrawal
   remainingBalances: Record<string, number>; // accountId -> remaining balance
   totalWithdrawal: number;
+  traditionalWithdrawal: number;
+  rothWithdrawal: number;
+  taxableWithdrawal: number;
+  hsaWithdrawal: number;
   socialSecurityIncome: number;
   grossIncome: number;
   federalTax: number;
@@ -90,6 +100,12 @@ export interface YearlyWithdrawal {
   afterTaxIncome: number;
   targetSpending: number;
   rmdAmount: number;
+  rothConversionAmount: number;
+  rothConversionFromAccountId: string | null;
+  rothConversionToAccountId: string | null;
+  rothConversionReason?: string; // explanation of why this amount was chosen
+  irmaaThresholdDistance?: number; // how close to next IRMAA threshold
+  effectiveMarginalRate?: number; // marginal rate including IRMAA impact
   totalRemainingBalance: number;
 }
 
@@ -121,11 +137,20 @@ export interface RMDEntry {
   divisor: number;
 }
 
+// IRMAA threshold structure
+export interface IRMAAThreshold {
+  min: number;
+  max: number;
+  partBSurcharge: number;
+  partDSurcharge: number;
+}
+
 // Helper function type for getting tax treatment
 export function getTaxTreatment(accountType: AccountType): TaxTreatment {
   switch (accountType) {
     // US accounts
-    case 'traditional_401k':
+    case 'traditional_401k_403b':
+    case 'traditional_457b':
     case 'traditional_ira':
       return 'pretax';
     case 'roth_401k':
@@ -155,8 +180,10 @@ export function getTaxTreatment(accountType: AccountType): TaxTreatment {
 export function getAccountTypeLabel(type: AccountType): string {
   switch (type) {
     // US accounts
-    case 'traditional_401k':
-      return 'Traditional 401(k)';
+    case 'traditional_401k_403b':
+      return 'Traditional 401(k)/403(b)';
+    case 'traditional_457b':
+      return 'Traditional 457(b)';
     case 'roth_401k':
       return 'Roth 401(k)';
     case 'traditional_ira':
@@ -190,9 +217,9 @@ export function getAccountTypeLabel(type: AccountType): string {
 }
 
 export function is401k(type: AccountType): boolean {
-  return type === 'traditional_401k' || type === 'roth_401k';
+  return type === 'traditional_401k_403b' || type === 'roth_401k';
 }
 
 export function isTraditional(type: string): boolean {
-  return type === 'traditional_401k' || type === 'traditional_ira';
+  return type === 'traditional_401k_403b' || type === 'traditional_ira';
 }

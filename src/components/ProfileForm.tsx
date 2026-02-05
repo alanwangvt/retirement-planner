@@ -136,10 +136,10 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Annual Benefit (today's $)
+            Monthly Benefit at Start Age
             <Tooltip text={country === 'CA'
-              ? "Your estimated annual CPP benefit in today's dollars"
-              : "Your estimated annual Social Security benefit in today's dollars"}
+              ? "Your estimated monthly CPP benefit at start age"
+              : "Your estimated monthly Social Security benefit at start age"}
             />
           </label>
           <NumberInput
@@ -177,7 +177,7 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Annual Benefit (today's $)
+                Annual Benefit ($ at start age)
                 <Tooltip text="Your estimated annual OAS benefit in today's dollars. Max is ~$9,000/year in 2024." />
               </label>
               <NumberInput

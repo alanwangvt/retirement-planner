@@ -10,7 +10,7 @@ interface AssumptionsFormProps {
 const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white";
 
 export function AssumptionsForm({ assumptions, onChange }: AssumptionsFormProps) {
-  const handleChange = (field: keyof Assumptions, value: number) => {
+  const handleChange = (field: keyof Assumptions, value: number | undefined) => {
     onChange({
       ...assumptions,
       [field]: value,
@@ -74,6 +74,26 @@ export function AssumptionsForm({ assumptions, onChange }: AssumptionsFormProps)
             className={inputClassName}
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Conservative assumption: 5%</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Annual Spending at Retirement ($)
+            <Tooltip text="Your desired annual spending amount at retirement start. Leave blank to auto-calculate based on portfolio value and safe withdrawal rate." />
+          </label>
+          <NumberInput
+            value={assumptions.annualSpendingAtRetirement || 0}
+            onChange={(val) => handleChange('annualSpendingAtRetirement', val > 0 ? val : undefined)}
+            min={0}
+            step={1000}
+            isPercentage={false}
+            decimals={0}
+            defaultValue={0}
+            className={inputClassName}
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Optional: Overrides safe withdrawal rate calculation. Leave at $0 for automatic calculation.
+          </p>
         </div>
       </div>
     </div>

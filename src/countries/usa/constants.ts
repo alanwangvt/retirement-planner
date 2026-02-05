@@ -1,43 +1,71 @@
-import type { TaxBracket, RMDEntry } from '../../types';
+import type { TaxBracket, RMDEntry, IRMAAThreshold } from '../../types';
 
-// 2024 Federal Tax Brackets - Married Filing Jointly
+// 2025 Federal Tax Brackets - Married Filing Jointly
 export const TAX_BRACKETS_MFJ: TaxBracket[] = [
-  { min: 0, max: 23200, rate: 0.10 },
-  { min: 23200, max: 94300, rate: 0.12 },
-  { min: 94300, max: 201050, rate: 0.22 },
-  { min: 201050, max: 383900, rate: 0.24 },
-  { min: 383900, max: 487450, rate: 0.32 },
-  { min: 487450, max: 731200, rate: 0.35 },
-  { min: 731200, max: Infinity, rate: 0.37 },
+  { min: 0, max: 23850, rate: 0.10 },
+  { min: 23850, max: 96950, rate: 0.12 },
+  { min: 96950, max: 206700, rate: 0.22 },
+  { min: 206700, max: 394600, rate: 0.24 },
+  { min: 394600, max: 501050, rate: 0.32 },
+  { min: 501050, max: 751600, rate: 0.35 },
+  { min: 751600, max: Infinity, rate: 0.37 },
 ];
 
-// 2024 Federal Tax Brackets - Single
+// 2025 Federal Tax Brackets - Single
 export const TAX_BRACKETS_SINGLE: TaxBracket[] = [
-  { min: 0, max: 11600, rate: 0.10 },
-  { min: 11600, max: 47150, rate: 0.12 },
-  { min: 47150, max: 100525, rate: 0.22 },
-  { min: 100525, max: 191950, rate: 0.24 },
-  { min: 191950, max: 243725, rate: 0.32 },
-  { min: 243725, max: 609350, rate: 0.35 },
-  { min: 609350, max: Infinity, rate: 0.37 },
+  { min: 0, max: 11925, rate: 0.10 },
+  { min: 11925, max: 48475, rate: 0.12 },
+  { min: 48475, max: 103350, rate: 0.22 },
+  { min: 103350, max: 197300, rate: 0.24 },
+  { min: 197300, max: 250525, rate: 0.32 },
+  { min: 250525, max: 626350, rate: 0.35 },
+  { min: 626350, max: Infinity, rate: 0.37 },
 ];
 
-// 2024 Standard Deductions
-export const STANDARD_DEDUCTION_MFJ = 29200;
-export const STANDARD_DEDUCTION_SINGLE = 14600;
+// 2025 Standard Deductions
+export const STANDARD_DEDUCTION_MFJ = 31500;
+export const STANDARD_DEDUCTION_SINGLE = 15750;
 
-// Long-term capital gains rates (2024)
+// Long-term capital gains rates (2025)
 export const CAPITAL_GAINS_BRACKETS_MFJ: TaxBracket[] = [
-  { min: 0, max: 94050, rate: 0 },
-  { min: 94050, max: 583750, rate: 0.15 },
-  { min: 583750, max: Infinity, rate: 0.20 },
+  { min: 0, max: 96700, rate: 0 },
+  { min: 96700, max: 600050, rate: 0.15 },
+  { min: 600050, max: Infinity, rate: 0.20 },
 ];
 
 export const CAPITAL_GAINS_BRACKETS_SINGLE: TaxBracket[] = [
-  { min: 0, max: 47025, rate: 0 },
-  { min: 47025, max: 518900, rate: 0.15 },
-  { min: 518900, max: Infinity, rate: 0.20 },
+  { min: 0, max: 48350, rate: 0 },
+  { min: 48350, max: 533400, rate: 0.15 },
+  { min: 533400, max: Infinity, rate: 0.20 },
 ];
+
+// 2025 IRMAA Thresholds (Medicare Part B & D Surcharges)
+// Based on Modified Adjusted Gross Income (MAGI) from 2 years prior
+// Surcharges are monthly amounts added to base Medicare premiums
+
+export const IRMAA_THRESHOLDS_MFJ: IRMAAThreshold[] = [
+  { min: 0, max: 212000, partBSurcharge: 0, partDSurcharge: 0 },
+  { min: 212000, max: 268000, partBSurcharge: 70.00, partDSurcharge: 12.90 },
+  { min: 268000, max: 330000, partBSurcharge: 175.00, partDSurcharge: 33.30 },
+  { min: 330000, max: 394000, partBSurcharge: 280.00, partDSurcharge: 53.80 },
+  { min: 394000, max: 750000, partBSurcharge: 385.00, partDSurcharge: 74.20 },
+  { min: 750000, max: Infinity, partBSurcharge: 420.00, partDSurcharge: 85.80 },
+];
+
+export const IRMAA_THRESHOLDS_SINGLE: IRMAAThreshold[] = [
+  { min: 0, max: 106000, partBSurcharge: 0, partDSurcharge: 0 },
+  { min: 106000, max: 134000, partBSurcharge: 70.00, partDSurcharge: 12.90 },
+  { min: 134000, max: 167000, partBSurcharge: 175.00, partDSurcharge: 33.30 },
+  { min: 167000, max: 200000, partBSurcharge: 280.00, partDSurcharge: 53.80 },
+  { min: 200000, max: 500000, partBSurcharge: 385.00, partDSurcharge: 74.20 },
+  { min: 500000, max: Infinity, partBSurcharge: 420.00, partDSurcharge: 85.80 },
+];
+
+// Medicare starts at age 65
+export const MEDICARE_START_AGE = 65;
+
+// IRMAA uses MAGI from 2 years prior
+export const IRMAA_LOOKBACK_YEARS = 2;
 
 // RMD starts at age 73 (SECURE 2.0 Act)
 export const RMD_START_AGE = 73;

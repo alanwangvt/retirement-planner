@@ -57,6 +57,12 @@ function CustomTooltip({ active, payload, label, result }: CustomTooltipProps) {
           <span style={{ color: CHART_COLORS.pretax }}>Withdrawals:</span>
           <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.totalWithdrawal)}</span>
         </div>
+        {(yearData.rothConversionAmount || 0) > 0 && (
+          <div className="flex justify-between gap-4">
+            <span style={{ color: '#a855f7' }}>Roth Conversion:</span>
+            <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.rothConversionAmount || 0)}</span>
+          </div>
+        )}
         {yearData.socialSecurityIncome > 0 && (
           <div className="flex justify-between gap-4">
             <span style={{ color: CHART_COLORS.socialSecurity }}>Social Security:</span>
@@ -67,12 +73,18 @@ function CustomTooltip({ active, payload, label, result }: CustomTooltipProps) {
           <span className="text-gray-600 dark:text-gray-400">Gross Income:</span>
           <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.grossIncome)}</span>
         </div>
+        {yearData.rmdAmount > 0 && (
+          <div className="flex justify-between gap-4">
+            <span style={{ color: '#000000' }}>RMD:</span>
+            <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.rmdAmount)}</span>
+          </div>
+        )}
         <div className="flex justify-between gap-4">
           <span style={{ color: CHART_COLORS.tax }}>Taxes:</span>
           <span className="font-medium text-red-600 dark:text-red-400">-{formatTooltipValue(yearData.totalTax)}</span>
         </div>
         <div className="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2 flex justify-between gap-4 font-semibold">
-          <span style={{ color: CHART_COLORS.spending }}>After-Tax Income:</span>
+          <span style={{ color: CHART_COLORS.spending }}>After-Tax Spendable Income:</span>
           <span className="text-gray-900 dark:text-white">{formatTooltipValue(yearData.afterTaxIncome)}</span>
         </div>
       </div>
@@ -94,6 +106,8 @@ export function ChartIncome({ result, isDarkMode = false }: ChartIncomeProps) {
     taxes: year.totalTax, // Keep positive for separate display
     afterTax: year.afterTaxIncome,
     gross: year.grossIncome,
+    rmd: year.rmdAmount,
+    rothConversion: year.rothConversionAmount || 0,
     // For the net visualization, we'll show after-tax as a line
   }));
 
@@ -140,7 +154,7 @@ export function ChartIncome({ result, isDarkMode = false }: ChartIncomeProps) {
           <Line
             type="monotone"
             dataKey="afterTax"
-            name="After-Tax Income"
+            name="After-Tax Spendable Income"
             stroke={CHART_COLORS.spending}
             strokeWidth={3}
             dot={false}
@@ -153,6 +167,15 @@ export function ChartIncome({ result, isDarkMode = false }: ChartIncomeProps) {
             stroke={CHART_COLORS.tax}
             strokeWidth={2}
             strokeDasharray="5 5"
+            dot={false}
+          />
+          {/* Required Minimum Distribution line */}
+          <Line
+            type="monotone"
+            dataKey="rmd"
+            name="RMD"
+            stroke="#000000"
+            strokeWidth={2}
             dot={false}
           />
         </ComposedChart>

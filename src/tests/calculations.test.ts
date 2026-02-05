@@ -61,8 +61,8 @@ function testTaxCalculations(): void {
 
   console.log('\n--- Federal Income Tax (Married Filing Jointly) ---');
 
-  // Standard deduction is $29,200 for MFJ in 2024
-  // So taxable income = gross - 29200
+  // Standard deduction is $31,500 for MFJ in 2025
+  // So taxable income = gross - 31500
 
   // Test 1: Income fully covered by standard deduction
   const tax1 = calculateFederalIncomeTax(0, 'married_filing_jointly');
@@ -102,10 +102,10 @@ function testTaxCalculations(): void {
   console.log('\n--- Standard Deduction ---');
 
   const stdMFJ = getStandardDeduction('married_filing_jointly');
-  assertApprox(stdMFJ, 29200, 0.01, 'MFJ standard deduction = $29,200');
+  assertApprox(stdMFJ, 31500, 0.01, 'MFJ standard deduction = $31,500');
 
   const stdSingle = getStandardDeduction('single');
-  assertApprox(stdSingle, 14600, 0.01, 'Single standard deduction = $14,600');
+  assertApprox(stdSingle, 15750, 0.01, 'Single standard deduction = $15,750');
 
   console.log('\n--- State Tax ---');
 
