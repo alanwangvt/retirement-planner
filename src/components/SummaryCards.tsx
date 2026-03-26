@@ -153,17 +153,19 @@ export function SummaryCards({
       : 'green'
     : 'green';
 
-  const standardDeduction = profile.filingStatus === 'married_filing_jointly'
-    ? STANDARD_DEDUCTION_MFJ
-    : STANDARD_DEDUCTION_SINGLE;
-
   // Calculate some useful derived values for display
   const yearsToRetirement = Math.max(0, profile.retirementAge - profile.currentAge);
   const retirementYears = Math.max(0, profile.lifeExpectancy - profile.retirementAge);
 
-  // Calculate average effective tax rate
-  const avgEffectiveTaxRate = yearlyWithdrawals.length > 0
-    ? yearlyWithdrawals.reduce((sum, y) => sum + (y.grossIncome > 0 ? y.totalTax / y.grossIncome : 0), 0) / yearlyWithdrawals.length
+  // Total withdrawals across all retirement years
+  const totalLifetimeWithdrawals = yearlyWithdrawals.reduce((sum, y) => sum + y.totalWithdrawal, 0);
+  const totalTraditionalWithdrawals = yearlyWithdrawals.reduce((sum, y) => sum + y.traditionalWithdrawal, 0);
+  const totalRothWithdrawals = yearlyWithdrawals.reduce((sum, y) => sum + y.rothWithdrawal, 0);
+  const totalTaxableWithdrawals = yearlyWithdrawals.reduce((sum, y) => sum + y.taxableWithdrawal, 0);
+  const totalHsaWithdrawals = yearlyWithdrawals.reduce((sum, y) => sum + y.hsaWithdrawal, 0);
+  const totalSocialSecurity = yearlyWithdrawals.reduce((sum, y) => sum + y.socialSecurityIncome, 0);
+  const finalBalance = yearlyWithdrawals.length > 0
+    ? yearlyWithdrawals[yearlyWithdrawals.length - 1].totalRemainingBalance
     : 0;
 
   return (
@@ -305,28 +307,63 @@ export function SummaryCards({
             }
           />
           <ExpandableStatCard
+            title="Total Withdrawals"
+            value={formatCurrency(totalLifetimeWithdrawals)}
+            subtitle={`Over ${retirementYears} years`}
+            color="teal"
+            formula="Sum of all portfolio withdrawals across retirement years"
+            details={
+              <div>
+                <p className="font-medium mb-1">Breakdown by source:</p>
+                <ul className="space-y-0.5 mb-2">
+                  {totalTraditionalWithdrawals > 0 && <li>Pre-tax: {formatCurrency(totalTraditionalWithdrawals)}</li>}
+                  {totalRothWithdrawals > 0 && <li>Roth: {formatCurrency(totalRothWithdrawals)}</li>}
+                  {totalTaxableWithdrawals > 0 && <li>Taxable: {formatCurrency(totalTaxableWithdrawals)}</li>}
+                  {totalHsaWithdrawals > 0 && <li>HSA: {formatCurrency(totalHsaWithdrawals)}</li>}
+                  {totalSocialSecurity > 0 && <li>Social Security: {formatCurrency(totalSocialSecurity)}</li>}
+                </ul>
+                <p className="text-gray-500 dark:text-gray-400 italic">
+                  Nominal dollars (inflation-adjusted over time).
+                </p>
+              </div>
+            }
+          />
+          <ExpandableStatCard
             title="Lifetime Taxes"
             value={formatCurrency(lifetimeTaxesPaid)}
-            subtitle="Total taxes in retirement"
+            subtitle="Federal + state income tax"
             color="purple"
-            formula={country === 'CA'
-              ? 'Sum of federal + provincial taxes across all retirement years'
-              : 'Sum of federal + state taxes across all retirement years'}
+            formula="totalTax = federalIncomeTax + stateIncomeTax (no capital gains)"
+            details={
+              <div>
+                <p className="mb-1">Over {retirementYears} years of retirement:</p>
+                <ul className="space-y-0.5">
+                  <li>Federal: {formatCurrency(yearlyWithdrawals.reduce((sum, y) => sum + y.federalTax, 0))}</li>
+                  <li>State: {formatCurrency(yearlyWithdrawals.reduce((sum, y) => sum + y.stateTax, 0))}</li>
+                </ul>
+              </div>
+            }
+          />
+          <ExpandableStatCard
+            title="Remaining Balance"
+            value={formatCurrency(finalBalance)}
+            subtitle={`At age ${profile.lifeExpectancy}`}
+            color={finalBalance > 0 ? 'green' : 'amber'}
+            formula="Final portfolio balance at end of retirement simulation"
             details={
               <div>
                 <p className="mb-1">
-                  Over {retirementYears} years of retirement:
+                  Balance remaining at age {profile.lifeExpectancy} after {retirementYears} years of withdrawals.
                 </p>
-                <ul className="space-y-0.5 mb-2">
-                  <li>Federal taxes: {formatCurrency(yearlyWithdrawals.reduce((sum, y) => sum + y.federalTax, 0))}</li>
-                  <li>{country === 'CA' ? 'Provincial' : 'State'} taxes: {formatCurrency(yearlyWithdrawals.reduce((sum, y) => sum + y.stateTax, 0))}</li>
-                </ul>
-                <p>
-                  Average effective tax rate: {formatPercent(avgEffectiveTaxRate)}
-                </p>
-                <p className="text-gray-500 dark:text-gray-400 italic mt-1">
-                  Standard deduction: {formatCurrency(standardDeduction)} ({profile.filingStatus === 'married_filing_jointly' ? 'MFJ' : 'Single'})
-                </p>
+                {finalBalance > 0 ? (
+                  <p className="text-green-600 dark:text-green-400">
+                    Portfolio surplus — this amount could be left as an estate or used to extend retirement.
+                  </p>
+                ) : (
+                  <p className="text-amber-600 dark:text-amber-400">
+                    Portfolio fully depleted by end of retirement.
+                  </p>
+                )}
               </div>
             }
           />
@@ -384,7 +421,7 @@ export function SummaryCards({
       </div>
 
       {/* Roth Conversion Planning */}
-      {yearlyWithdrawals.length > 0 && assumptions.rothConversionStrategy === 'auto' && (
+      {yearlyWithdrawals.length > 0 && (assumptions.rothConversionStrategy === 'auto' || assumptions.rothConversionStrategy === 'aggressive-early') && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Roth Conversion Planning</h3>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">

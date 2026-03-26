@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Account, RetirementResult, Profile, getTaxTreatment } from '../types';
-import { STANDARD_DEDUCTION_MFJ, STANDARD_DEDUCTION_SINGLE } from '../utils/constants';
 
 interface DataTableWithdrawalProps {
   accounts: Account[];
@@ -21,7 +20,7 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-type ViewMode = 'income' | 'withdrawals' | 'balances' | 'taxes' | 'conversions';
+type ViewMode = 'income' | 'withdrawals' | 'balances' | 'conversions';
 
 export function DataTableWithdrawal({ accounts, result, profile }: DataTableWithdrawalProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -102,16 +101,6 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
               Remaining Balances
             </button>
             <button
-              onClick={() => setViewMode('taxes')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                viewMode === 'taxes'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Tax Details
-            </button>
-            <button
               onClick={() => setViewMode('conversions')}
               className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
                 viewMode === 'conversions'
@@ -132,18 +121,12 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Target Spending</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Withdrawals</th>
                     <th className="text-right py-2 px-2 font-medium text-indigo-600 dark:text-indigo-400">Social Security</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Income</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">AGI</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Taxable Income</th>
-                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Taxes</th>
-                    <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">After-Tax Spendable Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">Spendable Income</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.yearlyWithdrawals.map((yearData) => {
-                    const agi = yearData.grossIncome - yearData.hsaWithdrawal;
-                    const standardDeduction = profile.filingStatus === 'married_filing_jointly' ? STANDARD_DEDUCTION_MFJ : STANDARD_DEDUCTION_SINGLE;
-                    const taxableIncome = Math.max(0, agi - standardDeduction);
                     return (
                       <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                         <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
@@ -152,10 +135,9 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                         <td className="py-2 px-2 text-right font-mono text-indigo-600 dark:text-indigo-400">
                           {yearData.socialSecurityIncome > 0 ? formatCurrency(yearData.socialSecurityIncome) : '-'}
                         </td>
-                        <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.grossIncome)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(agi)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(taxableIncome)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">
+                          {yearData.totalTax > 0 ? formatCurrency(yearData.totalTax) : '-'}
+                        </td>
                         <td className="py-2 px-2 text-right font-mono text-teal-600 dark:text-teal-400">{formatCurrency(yearData.afterTaxIncome)}</td>
                       </tr>
                     );
@@ -171,13 +153,6 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                     <td className="py-2 px-2 text-right font-mono font-medium text-indigo-600 dark:text-indigo-400">
                       {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.socialSecurityIncome, 0))}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome, 0))}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-700 dark:text-gray-300">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome - y.hsaWithdrawal, 0))}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
                       {formatCurrency(result.lifetimeTaxesPaid)}
                     </td>
@@ -252,59 +227,6 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            )}
-
-            {viewMode === 'taxes' && (
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Income</th>
-                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
-                    <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
-                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Tax</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Effective Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.yearlyWithdrawals.map((yearData) => {
-                    const effectiveRate = yearData.grossIncome > 0 ? yearData.totalTax / yearData.grossIncome : 0;
-                    return (
-                      <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                        <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
-                        <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.grossIncome)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.federalTax)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-orange-600 dark:text-orange-400">{formatCurrency(yearData.stateTax)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(effectiveRate)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
-                    <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
-                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome, 0))}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.federalTax, 0))}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono font-medium text-orange-600 dark:text-orange-400">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.stateTax, 0))}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
-                      {formatCurrency(result.lifetimeTaxesPaid)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                      {formatPercent(
-                        result.lifetimeTaxesPaid /
-                        result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome, 0)
-                      )}
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             )}
 

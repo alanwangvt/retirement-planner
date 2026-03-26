@@ -5,13 +5,16 @@ import {
   AccumulationResult,
   RetirementResult,
   YearlyWithdrawal,
+  FilingStatus,
   getTaxTreatment,
   isTraditional,
 } from '../types';
 import {
   calculateTotalFederalTax,
   calculateStateTax,
+  calculateSSTaxableAmount,
   getStandardDeduction,
+  getCapitalGainsBrackets,
   getMarginalTaxRate,
   getWithdrawalToFillBracket,
   getRoomToNextIRMAAThreshold,
@@ -37,10 +40,67 @@ interface RothConversionResult {
 }
 
 /**
- * Perform Roth conversion based on strategy
- * Automatically converts up to the minimum of:
- * - Target tax bracket ceiling
- * - Next IRMAA threshold
+ * Project future forced ordinary income (RMDs + taxable SS) across remaining retirement years
+ * and return the marginal tax rate at the average annual income.
+ * Gives the "level" rate that equalizes tax burden across all remaining years.
+ * Recomputed each year as balances evolve.
+ */
+function computeLevelTargetRate(
+  accountStates: AccountState[],
+  profile: Profile,
+  assumptions: Assumptions,
+  currentAge: number,
+  currentSocialSecurityIncome: number,
+  filingStatus: FilingStatus,
+  countryConfig?: CountryConfig
+): number {
+  const remainingYears = profile.lifeExpectancy - currentAge;
+  if (remainingYears <= 0) return 0;
+
+  const isTraditionalAccountFn = (type: string) =>
+    countryConfig ? countryConfig.isTraditionalAccount(type) : isTraditional(type);
+  const firstTradType = accountStates.find(acc => isTraditionalAccountFn(acc.type))?.type;
+
+  let projectedTradBalance = accountStates
+    .filter(acc => isTraditionalAccountFn(acc.type))
+    .reduce((sum, acc) => sum + acc.balance, 0);
+
+  let totalFutureOrdinaryIncome = 0;
+  for (let y = 0; y < remainingYears; y++) {
+    const projectedAge = currentAge + y;
+    const ssIncome = currentSocialSecurityIncome > 0
+      ? currentSocialSecurityIncome * Math.pow(1 + assumptions.inflationRate, y)
+      : 0;
+
+    let rmd = 0;
+    if (countryConfig && firstTradType) {
+      rmd = countryConfig.getMinimumWithdrawal(projectedAge, projectedTradBalance, firstTradType);
+    } else if (projectedAge >= RMD_START_AGE) {
+      const divisor = getRMDDivisor(projectedAge);
+      if (divisor > 0) rmd = projectedTradBalance / divisor;
+    }
+
+    const ssTaxable = calculateSSTaxableAmount(ssIncome, rmd, filingStatus);
+    totalFutureOrdinaryIncome += rmd + ssTaxable;
+
+    projectedTradBalance = Math.max(
+      0,
+      projectedTradBalance * (1 + assumptions.retirementReturnRate) - rmd
+    );
+  }
+
+  const averageAnnualOrdinaryIncome = totalFutureOrdinaryIncome / remainingYears;
+  return getMarginalTaxRate(averageAnnualOrdinaryIncome, filingStatus);
+}
+
+/**
+ * Perform Roth conversion based on strategy:
+ *
+ * aggressive-early (pre-RMD):  Convert up to user-set target bracket, capped at IRMAA.
+ * aggressive-early (post-RMD): Convert only the 0% room (gap to standard deduction), capped at IRMAA.
+ * auto: Bracket-smoothing — compute the level marginal rate that equalizes tax across all remaining
+ *   years from projected RMDs + SS. Convert up to that bracket, with standard deduction as floor,
+ *   capped at IRMAA.
  */
 function performRothConversion(
   accountStates: AccountState[],
@@ -50,7 +110,7 @@ function performRothConversion(
   socialSecurityIncome: number,
   targetSpending: number,
   age: number,
-  yearsIntoRetirement: number,
+  _yearsIntoRetirement: number,
   countryConfig?: CountryConfig
 ): RothConversionResult {
   const result: RothConversionResult = {
@@ -60,55 +120,73 @@ function performRothConversion(
     toAccountId: null,
   };
 
-  // Check if conversions are enabled
   const strategy = assumptions.rothConversionStrategy ?? 'off';
   if (strategy === 'off') return result;
 
-  const targetRate = assumptions.rothConversionTargetRate ?? 0.22;
-  const inflationRate = assumptions.inflationRate ?? 0.03;
+  const isPreRMD = age < RMD_START_AGE;
   const filingStatus = profile.filingStatus || 'single';
+  const stdDed = getStandardDeduction(filingStatus);
+  const stdDedRoom = Math.max(0, stdDed - currentOrdinaryIncome);
 
-  // Check current marginal rate
-  const currentMarginalRate = getMarginalTaxRate(currentOrdinaryIncome, filingStatus);
-  
-  // Don't convert if we're already at or above target rate
-  if (currentMarginalRate >= targetRate) {
-    result.reason = `Already at ${(currentMarginalRate * 100).toFixed(0)}% bracket`;
-    return result;
-  }
-
-  // Get account groups
-  const isTraditionalAccount = (type: string) =>
+  // Get account groups (shared across strategies)
+  const isTraditionalAccountFn = (type: string) =>
     countryConfig ? countryConfig.isTraditionalAccount(type) : isTraditional(type);
   const traditionalAccounts = accountStates
-    .filter(acc => isTraditionalAccount(acc.type) && acc.balance > 0)
-    .sort((a, b) => b.balance - a.balance); // Largest first
+    .filter(acc => isTraditionalAccountFn(acc.type) && acc.balance > 0)
+    .sort((a, b) => b.balance - a.balance);
   const rothAccounts = accountStates
     .filter(acc => getTaxTreatment(acc.type) === 'roth' && acc.balance >= 0)
-    .sort((a, b) => b.balance - a.balance); // Largest first
+    .sort((a, b) => b.balance - a.balance);
 
   if (traditionalAccounts.length === 0) {
     result.reason = 'No traditional accounts';
     return result;
   }
 
-  // Calculate room in target bracket
-  const roomInBracket = getWithdrawalToFillBracket(
-    currentOrdinaryIncome,
-    targetRate,
-    filingStatus
-  );
-
-  // Calculate room to next IRMAA threshold (for current year's MAGI)
-  // MAGI ≈ ordinary income for retirement purposes (simplified)
+  // IRMAA constraint (shared)
   const roomToIRMAA = getRoomToNextIRMAAThreshold(currentOrdinaryIncome, filingStatus);
   const irmaaProximity = getIRMAAProximity(currentOrdinaryIncome, age, filingStatus);
 
-  // Determine constraint: minimum of bracket room and IRMAA room
-  let maxConversion = roomInBracket;
-  let limitingFactor = 'bracket';
+  // --- Determine maxConversion by strategy ---
+  let maxConversion = 0;
+  let limitingFactor = '';
+  let targetRateForReason = 0;
 
-  if (irmaaProximity && roomToIRMAA < roomInBracket) {
+  if (strategy === 'aggressive-early' && isPreRMD) {
+    // Pre-RMD: convert up to user-set target rate
+    const targetRate = assumptions.rothConversionTargetRate ?? 0.22;
+    const currentMarginalRate = getMarginalTaxRate(currentOrdinaryIncome, filingStatus);
+    if (currentMarginalRate >= targetRate) {
+      result.reason = `Already at ${(currentMarginalRate * 100).toFixed(0)}% bracket`;
+      return result;
+    }
+    maxConversion = getWithdrawalToFillBracket(currentOrdinaryIncome, targetRate, filingStatus);
+    limitingFactor = `${(targetRate * 100).toFixed(0)}% bracket`;
+    targetRateForReason = targetRate;
+  } else if (strategy === 'aggressive-early' && !isPreRMD) {
+    // Post-RMD: only harvest the 0% room (income below standard deduction)
+    maxConversion = stdDedRoom;
+    limitingFactor = '0% floor';
+  } else {
+    // auto: bracket-smoothing with standard-deduction floor
+    const levelTargetRate = computeLevelTargetRate(
+      accountStates, profile, assumptions, age,
+      socialSecurityIncome, filingStatus, countryConfig
+    );
+    // getWithdrawalToFillBracket includes stdDedRoom when income < stdDed
+    const levelRoom = levelTargetRate > 0
+      ? getWithdrawalToFillBracket(currentOrdinaryIncome, levelTargetRate, filingStatus)
+      : stdDedRoom;
+    // Floor: always at least the 0% room even if level rate falls below standard deduction
+    maxConversion = Math.max(levelRoom, stdDedRoom);
+    limitingFactor = levelTargetRate > 0
+      ? `${(levelTargetRate * 100).toFixed(0)}% level bracket`
+      : '0% floor';
+    targetRateForReason = levelTargetRate;
+  }
+
+  // Apply IRMAA cap
+  if (irmaaProximity && roomToIRMAA < maxConversion) {
     maxConversion = roomToIRMAA;
     limitingFactor = 'IRMAA';
   }
@@ -119,54 +197,40 @@ function performRothConversion(
     return result;
   }
 
-  // Check if we can afford the tax on conversion and still meet living expenses
-  // Estimate tax on conversion
-  const marginalRateOnConversion = getMarginalTaxRate(
-    currentOrdinaryIncome + maxConversion,
-    filingStatus
-  );
+  // Safety margin check
+  const marginalRateOnConversion = getMarginalTaxRate(currentOrdinaryIncome + maxConversion, filingStatus);
   const estimatedTax = maxConversion * marginalRateOnConversion;
-  
-  // Verify we have sufficient portfolio balance to cover conversion tax plus living expenses
   const totalPortfolioBalance = accountStates.reduce((sum, acc) => sum + acc.balance, 0);
   const cashNeededThisYear = targetSpending + estimatedTax - socialSecurityIncome;
-  
-  // Only convert if we have enough assets (at least 5 years of expenses as safety margin)
   if (totalPortfolioBalance < cashNeededThisYear * 5) {
     result.reason = 'Insufficient assets for safety margin';
     return result;
   }
 
-  // Perform conversion from largest traditional to largest Roth (or create implicit Roth)
+  // Execute conversion: largest traditional → largest Roth
   const fromAccount = traditionalAccounts[0];
   const actualConversion = Math.min(maxConversion, fromAccount.balance);
-  
   if (actualConversion <= 0) {
     result.reason = 'No balance to convert';
     return result;
   }
 
-  // Reduce traditional account
   fromAccount.balance -= actualConversion;
-
-  // Add to Roth account (if exists, add to largest; otherwise it's a conversion that increases future Roth balance)
-  let toAccount = rothAccounts.length > 0 ? rothAccounts[0] : null;
-  if (toAccount) {
-    toAccount.balance += actualConversion;
-  }
+  const toAccount = rothAccounts.length > 0 ? rothAccounts[0] : null;
+  if (toAccount) toAccount.balance += actualConversion;
 
   result.conversionAmount = actualConversion;
   result.taxOnConversion = estimatedTax;
   result.fromAccountId = fromAccount.id;
   result.toAccountId = toAccount?.id || null;
   result.irmaaThresholdDistance = irmaaProximity?.distanceToNext ?? undefined;
-  
-  // Set reason for conversion
+
   if (limitingFactor === 'IRMAA') {
     const nextSurcharge = irmaaProximity?.nextSurchargeAnnual || 0;
-    result.reason = `Fill to ${(targetRate * 100).toFixed(0)}% (IRMAA limit: +$${Math.round(nextSurcharge)}/yr)`;
+    const rateLabel = targetRateForReason > 0 ? `${(targetRateForReason * 100).toFixed(0)}%` : '0%';
+    result.reason = `Fill to ${rateLabel} (IRMAA limit: +$${Math.round(nextSurcharge)}/yr)`;
   } else {
-    result.reason = `Fill to ${(targetRate * 100).toFixed(0)}% bracket`;
+    result.reason = `Fill to ${limitingFactor}`;
   }
 
   return result;
@@ -285,12 +349,34 @@ export function calculateWithdrawals(
       });
     const rmdAmount = totalMinimumWithdrawal;
 
+    // Estimate the ordinary income that will result from regular withdrawals this year,
+    // so the Roth conversion uses the correct base for bracket/IRMAA calculations.
+    // The withdrawal strategy will:
+    //   1. Take RMDs (already known)
+    //   2. Fill bracket with traditional (up to spending need) — skipped if taxable-first is active
+    //   3. Use taxable accounts for the remainder
+    //   4. Fall back to more traditional if taxable insufficient
+    const filingStatusForConversion = profile.filingStatus || 'single';
+    const rothStrategy = assumptions.rothConversionStrategy ?? 'off';
+    const estimatedFillTarget = rothStrategy === 'aggressive-early'
+      ? (assumptions.rothConversionTargetRate ?? 0.22)
+      : (assumptions.withdrawalBracketFillTarget ?? 0.12);
+    const ssBasis = calculateSSTaxableAmount(socialSecurityIncome, rmdAmount, filingStatusForConversion);
+    const roomInFillForEstimate = getWithdrawalToFillBracket(rmdAmount + ssBasis, estimatedFillTarget, filingStatusForConversion);
+    const spendingGapForEstimate = Math.max(0, targetSpending - socialSecurityIncome - rmdAmount);
+    const tradBracket12Fill = Math.min(roomInFillForEstimate, spendingGapForEstimate);
+    const taxableAvailable = accountStates
+      .filter(acc => getTaxTreatment(acc.type) === 'taxable')
+      .reduce((sum, acc) => sum + acc.balance, 0);
+    const tradFallback = Math.max(0, spendingGapForEstimate - tradBracket12Fill - taxableAvailable);
+    const estimatedBaseOrdinaryIncome = rmdAmount + tradBracket12Fill + tradFallback + ssBasis;
+
     // Perform Roth conversion before regular withdrawals
     const rothConversion = performRothConversion(
       accountStates,
       assumptions,
       profile,
-      socialSecurityIncome * 0.85, // Start with SS as base income
+      estimatedBaseOrdinaryIncome, // estimated ordinary income from regular withdrawals + SS
       socialSecurityIncome,
       targetSpending,
       age,
@@ -298,89 +384,39 @@ export function calculateWithdrawals(
       countryConfig
     );
 
-    // Tax-optimized withdrawal strategy
+    // Single-pass tax calculation — totalTax = federalIncomeTax + stateIncomeTax (no capital gains)
     const withdrawals = performTaxOptimizedWithdrawal(
-      accountStates,
-      targetSpending,
-      rmdAmount,
-      socialSecurityIncome,
-      profile,
-      accountDepletionAges,
-      age,
-      countryConfig
+      accountStates, targetSpending, rmdAmount, socialSecurityIncome,
+      profile, assumptions, accountDepletionAges, age, countryConfig
     );
 
-    // Apply investment returns to remaining balances
+    const filingStatusFS = profile.filingStatus || 'single';
+    const stdDed = getStandardDeduction(filingStatusFS);
+    const ssTaxable = calculateSSTaxableAmount(
+      socialSecurityIncome,
+      withdrawals.traditionalWithdrawal + rothConversion.conversionAmount,
+      filingStatusFS
+    );
+    const ordinaryIncome = withdrawals.traditionalWithdrawal + ssTaxable + rothConversion.conversionAmount;
+    const federalTax = calculateTotalFederalTax(ordinaryIncome, 0, filingStatusFS);
+    const stateTax = calculateStateTax(Math.max(0, ordinaryIncome - stdDed), profile.stateTaxRate || 0);
+    const totalTax = federalTax + stateTax;
+    lifetimeTaxesPaid += totalTax;
+    const afterTaxIncome = withdrawals.total + socialSecurityIncome - totalTax;
+    const grossIncome = withdrawals.traditionalWithdrawal + withdrawals.taxableWithdrawal +
+                        rothConversion.conversionAmount;
+
+    // Apply investment returns to remaining balances after finalised withdrawals
     accountStates.forEach(acc => {
       acc.balance *= (1 + assumptions.retirementReturnRate);
     });
 
-    // Calculate taxes using country-specific logic
-    // Include Roth conversion in ordinary income (it's taxable when converted)
-    const ordinaryIncome = withdrawals.traditionalWithdrawal + socialSecurityIncome * 0.85 + rothConversion.conversionAmount; // 85% of SS/CPP taxable
-    const capitalGains = withdrawals.taxableGains;
-
-    let federalTax: number;
-    let stateTax: number;
-
-    if (countryConfig) {
-      // Use country-specific tax calculations
-      federalTax = countryConfig.calculateFederalTax(ordinaryIncome, profile.filingStatus);
-      // Add capital gains tax (country handles inclusion rates)
-      federalTax += countryConfig.calculateCapitalGainsTax(
-        capitalGains,
-        ordinaryIncome,
-        profile.region || '',
-        profile.filingStatus
-      );
-      // Calculate regional (state/provincial) tax
-      stateTax = countryConfig.calculateRegionalTax(
-        ordinaryIncome + capitalGains,
-        profile.region || ''
-      );
-      // For US, regional tax is still calculated using flat rate from profile
-      // (the US config returns 0 from calculateRegionalTax)
-      if (countryConfig.code === 'US') {
-        stateTax = calculateStateTax(
-          ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
-          profile.stateTaxRate || 0
-        );
-      }
-    } else {
-      // Fallback to US logic
-      federalTax = calculateTotalFederalTax(
-        ordinaryIncome,
-        capitalGains,
-        profile.filingStatus || 'single'
-      );
-      stateTax = calculateStateTax(
-        ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
-        profile.stateTaxRate || 0
-      );
-    }
-    const totalTax = federalTax + stateTax;
-    lifetimeTaxesPaid += totalTax;
-
     // Add Roth conversion amounts to withdrawal tracking for display
-    // (conversion withdraws from traditional and deposits into Roth)
     const withdrawalsByAccount = { ...withdrawals.byAccount };
-    if (rothConversion.conversionAmount > 0) {
-      if (rothConversion.fromAccountId) {
-        withdrawalsByAccount[rothConversion.fromAccountId] = 
-          (withdrawalsByAccount[rothConversion.fromAccountId] || 0) + rothConversion.conversionAmount;
-      }
-      // Note: We don't subtract from toAccount because that would show as negative withdrawal
-      // The conversion is already reflected in account balances
+    if (rothConversion.conversionAmount > 0 && rothConversion.fromAccountId) {
+      withdrawalsByAccount[rothConversion.fromAccountId] =
+        (withdrawalsByAccount[rothConversion.fromAccountId] || 0) + rothConversion.conversionAmount;
     }
-
-    // Total withdrawals shown to the user should include Roth conversions
-    const grossWithdrawal = withdrawals.total + rothConversion.conversionAmount;
-    // Gross income is all taxable income: traditional + taxable + 85% SS + Roth conversions
-    // (Roth withdrawals & HSA withdrawals are NOT taxable, so excluded)
-    const grossIncome = withdrawals.traditionalWithdrawal + withdrawals.taxableWithdrawal + 
-                        socialSecurityIncome * 0.85 + rothConversion.conversionAmount;
-    // After-tax income is spendable cash including non-taxable withdrawals
-    const afterTaxIncome = withdrawals.total + socialSecurityIncome - totalTax;
 
     // Record the year's data
     const remainingBalances: Record<string, number> = {};
@@ -393,7 +429,7 @@ export function calculateWithdrawals(
       year,
       withdrawals: withdrawalsByAccount,
       remainingBalances,
-      totalWithdrawal: grossWithdrawal,
+      totalWithdrawal: withdrawals.total,
       traditionalWithdrawal: withdrawals.traditionalWithdrawal,
       rothWithdrawal: withdrawals.rothWithdrawal,
       taxableWithdrawal: withdrawals.taxableWithdrawal,
@@ -462,6 +498,7 @@ function performTaxOptimizedWithdrawal(
   rmdAmount: number,
   socialSecurityIncome: number,
   profile: Profile,
+  assumptions: Assumptions,
   accountDepletionAges: Record<string, number | null>,
   age: number,
   countryConfig?: CountryConfig
@@ -514,31 +551,60 @@ function performTaxOptimizedWithdrawal(
     }
   }
 
-  // Step 2: RULE 3 - Fill up to 12% bracket with additional traditional withdrawals
-  // (Standard deduction + 12% bracket gives good tax efficiency)
+  // Step 2: RULE 3 - Fill up to target bracket with additional traditional withdrawals.
+  // Always runs regardless of taxableFirstSpendingAge — filling the low bracket now (0-12%)
+  // prevents larger forced RMDs later at higher rates. Taxable accounts cover remaining
+  // spending above the bracket fill in Step 3.
   const filingStatus = profile.filingStatus || 'single';
   const standardDeduction = getStandardDeduction(filingStatus);
-  const bracket12Max = filingStatus === 'married_filing_jointly' ? 96950 : 48475;
-  const targetOrdinaryIncome = standardDeduction + bracket12Max;
-  const currentOrdinaryIncome = result.traditionalWithdrawal + socialSecurityIncome * 0.85;
-  const roomIn12Bracket = Math.max(0, targetOrdinaryIncome - currentOrdinaryIncome);
+  const rothStrategy = assumptions.rothConversionStrategy ?? 'off';
+  const fillTarget = rothStrategy === 'aggressive-early'
+    ? (assumptions.rothConversionTargetRate ?? 0.22)
+    : (assumptions.withdrawalBracketFillTarget ?? 0.12);
 
-  // Withdraw additional from traditional if we have room and need the money
-  const additionalTraditional = Math.min(roomIn12Bracket, remainingNeed);
-  let additionalRemaining = additionalTraditional;
+  {
+    const ssTaxableStep2 = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
+    const incomeAfterRMDs = result.traditionalWithdrawal + ssTaxableStep2;
+    const roomInFillBracket = getWithdrawalToFillBracket(incomeAfterRMDs, fillTarget, filingStatus);
 
-  for (const acc of traditionalAccounts) {
-    if (additionalRemaining <= 0) break;
-    const withdrawal = Math.min(additionalRemaining, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.traditionalWithdrawal += withdrawal;
-    result.total += withdrawal;
-    additionalRemaining -= withdrawal;
-    remainingNeed -= withdrawal;
+    // Withdraw additional from traditional if we have room and need the money
+    const additionalTraditional = Math.min(roomInFillBracket, remainingNeed);
+    let additionalRemaining = additionalTraditional;
 
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
+    for (const acc of traditionalAccounts) {
+      if (additionalRemaining <= 0) break;
+      const withdrawal = Math.min(additionalRemaining, acc.balance);
+      acc.balance -= withdrawal;
+      result.byAccount[acc.id] += withdrawal;
+      result.traditionalWithdrawal += withdrawal;
+      result.total += withdrawal;
+      additionalRemaining -= withdrawal;
+      remainingNeed -= withdrawal;
+
+      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+        accountDepletionAges[acc.id] = age;
+      }
+    }
+  }
+
+  // Step 2.5: 0% LTCG Harvesting
+  // In years where ordinary income is below the 0% capital gains threshold,
+  // step up cost basis on taxable accounts by simulating a sell-and-rebuy.
+  // This eliminates future capital gains taxes at no current cost.
+  {
+    const ltcgBrackets = getCapitalGainsBrackets(filingStatus);
+    const ltcg0Ceiling = ltcgBrackets[0].max; // 96700 MFJ / 48350 single
+    const ssTaxableForHarvest = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
+    const ordinaryTaxableIncome = Math.max(0, result.traditionalWithdrawal + ssTaxableForHarvest - standardDeduction);
+    let harvestRoom = Math.max(0, ltcg0Ceiling - ordinaryTaxableIncome);
+
+    for (const acc of taxableAccounts) {
+      if (harvestRoom <= 0) break;
+      const unrealizedGains = Math.max(0, acc.balance - acc.costBasis);
+      if (unrealizedGains <= 0) continue;
+      const harvestAmount = Math.min(unrealizedGains, harvestRoom);
+      acc.costBasis += harvestAmount; // step up basis — 0% tax, $0 cash impact
+      harvestRoom -= harvestAmount;
     }
   }
 
@@ -617,13 +683,7 @@ function performTaxOptimizedWithdrawal(
     remainingNeed -= withdrawal;
 
     if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;esult.traditionalWithdrawal += withdrawal;
-      result.total += withdrawal;
-      remainingNeed -= withdrawal;
-
-      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-        accountDepletionAges[acc.id] = age;
-      }
+      accountDepletionAges[acc.id] = age;
     }
   }
 

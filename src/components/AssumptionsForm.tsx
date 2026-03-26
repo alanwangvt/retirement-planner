@@ -95,6 +95,57 @@ export function AssumptionsForm({ assumptions, onChange }: AssumptionsFormProps)
             Optional: Overrides safe withdrawal rate calculation. Leave at $0 for automatic calculation.
           </p>
         </div>
+        {(assumptions.rothConversionStrategy ?? 'off') === 'off' ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Traditional Withdrawal Fill Target (%)
+              <Tooltip text="Fill traditional account withdrawals up to this tax bracket each year. Higher targets reduce large pre-tax balances earlier, smoothing lifetime taxes." />
+            </label>
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {[0.10, 0.12, 0.22, 0.24].map(rate => (
+                <button
+                  key={rate}
+                  type="button"
+                  onClick={() => handleChange('withdrawalBracketFillTarget', rate)}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    (assumptions.withdrawalBracketFillTarget ?? 0.12) === rate
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {(rate * 100).toFixed(0)}%
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              12% (default) works well for most. Use 22% if you have a large pre-tax balance to spread tax liability before RMDs force higher brackets.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Traditional withdrawal fill target is controlled by the Roth Conversion target bracket.
+          </p>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Use Taxable Accounts for Spending Before Age
+            <Tooltip text="Before this age, spending comes from taxable brokerage (capital gains) instead of traditional accounts. Keeps ordinary income low, leaving more bracket room for Roth conversions. Leave blank to disable." />
+          </label>
+          <NumberInput
+            value={assumptions.taxableFirstSpendingAge ?? 0}
+            onChange={(val) => handleChange('taxableFirstSpendingAge', val > 0 ? val : undefined)}
+            min={0}
+            max={100}
+            isPercentage={false}
+            decimals={0}
+            defaultValue={0}
+            className={inputClassName}
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            e.g. set to 62 to use taxable brokerage for spending until Social Security begins. Leave at 0 to disable.
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ export type AccountType = USAccountType | CAAccountType;
 
 export type FilingStatus = 'single' | 'married_filing_jointly';
 
-export type RothConversionStrategy = 'off' | 'auto';
+export type RothConversionStrategy = 'off' | 'auto' | 'aggressive-early';
 
 export type TaxTreatment = 'pretax' | 'roth' | 'taxable' | 'hsa';
 
@@ -65,6 +65,8 @@ export interface Assumptions {
   rothConversionStrategy?: RothConversionStrategy; // 'off' or 'auto' - auto fills to bracket/IRMAA limit
   rothConversionTargetRate?: number; // target marginal tax rate (e.g., 0.12, 0.22, 0.24)
   annualSpendingAtRetirement?: number; // user-specified annual spending at retirement start
+  withdrawalBracketFillTarget?: number; // target bracket for traditional withdrawal fill (default 0.12)
+  taxableFirstSpendingAge?: number;     // use taxable brokerage for spending before this age (reduces ordinary income)
 }
 
 export interface YearlyAccountBalance {

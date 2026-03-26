@@ -50,14 +50,24 @@ export function RothConversionForm({ assumptions, onChange }: RothConversionForm
             />
             <span className="text-sm text-gray-900 dark:text-white">Auto - Fill to bracket/IRMAA limit</span>
           </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="rothConversionStrategy"
+              value="aggressive-early"
+              checked={strategy === 'aggressive-early'}
+              onChange={(e) => handleChange('rothConversionStrategy', e.target.value as RothConversionStrategy)}
+              className="text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-900 dark:text-white">Aggressive Early - Convert to target bracket before RMDs; 0% conversions after age 73</span>
+          </label>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-          Auto strategy automatically converts the optimal amount each year to fill your target tax bracket 
-          while avoiding IRMAA (Medicare surcharge) penalties.
+          Auto uses bracket-smoothing — each year it projects future RMDs and Social Security to find the marginal rate that equalizes tax across all remaining years, converting up to that rate with a 0% floor (always fills income below the standard deduction). Aggressive Early converts to your chosen target rate before RMDs (pre-73), then falls back to 0% conversions only.
         </p>
       </div>
 
-      {strategy === 'auto' && (
+      {strategy === 'aggressive-early' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Target Tax Bracket (%)

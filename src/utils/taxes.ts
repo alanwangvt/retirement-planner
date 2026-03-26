@@ -185,6 +185,39 @@ export function getWithdrawalToFillBracket(
 }
 
 /**
+ * Calculate the taxable portion of Social Security income using the IRS
+ * provisional income formula (IRS Publication 915).
+ *
+ * Provisional income = otherOrdinaryIncome + 50% of SS
+ *   - Below base amount (T1): 0% of SS is taxable
+ *   - Between T1 and T2:      up to 50% of SS is taxable
+ *   - Above T2:               up to 85% of SS is taxable
+ */
+export function calculateSSTaxableAmount(
+  ssIncome: number,
+  otherOrdinaryIncome: number, // traditional withdrawals + Roth conversions (no SS)
+  filingStatus: FilingStatus
+): number {
+  if (ssIncome <= 0) return 0;
+
+  const [t1, t2] = filingStatus === 'married_filing_jointly'
+    ? [32000, 44000]
+    : [25000, 34000];
+
+  const provisionalIncome = otherOrdinaryIncome + ssIncome * 0.5;
+
+  if (provisionalIncome < t1) return 0;
+
+  if (provisionalIncome < t2) {
+    return Math.min(ssIncome * 0.5, (provisionalIncome - t1) * 0.5);
+  }
+
+  // PI >= T2: 85% zone
+  const zone2Portion = Math.min(ssIncome * 0.5, (t2 - t1) * 0.5);
+  return Math.min(ssIncome * 0.85, zone2Portion + 0.85 * (provisionalIncome - t2));
+}
+
+/**
  * Effective tax rate
  */
 export function getEffectiveTaxRate(

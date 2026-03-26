@@ -113,7 +113,7 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
         {country === 'US' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              State Tax Rate (%)
+              State Income Tax Rate (%)
             </label>
             <NumberInput
               value={profile.stateTaxRate || 0}
