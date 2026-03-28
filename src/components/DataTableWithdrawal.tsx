@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Account, RetirementResult, Profile, getTaxTreatment } from '../types';
+import { getAnnualIRMAASurcharge } from '../utils/taxes';
+import { Tooltip } from './Tooltip';
 
 interface DataTableWithdrawalProps {
   accounts: Account[];
@@ -15,10 +17,6 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatPercent(value: number): string {
-  if (!isFinite(value) || isNaN(value)) return '-';
-  return `${(value * 100).toFixed(1)}%`;
-}
 
 type ViewMode = 'income' | 'withdrawals' | 'balances' | 'conversions';
 
@@ -119,14 +117,25 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Target Spending</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Withdrawals</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Portfolio Drawdown<Tooltip text="Tax-deferred withdrawals excluding Roth conversions" /></th>
                     <th className="text-right py-2 px-2 font-medium text-indigo-600 dark:text-indigo-400">Social Security</th>
+                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-rose-600 dark:text-rose-400" title="Based on MAGI from 2 years prior (SSA lookback)">IRMAA</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-violet-600 dark:text-violet-400">MAGI</th>
                     <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">Spendable Income</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.yearlyWithdrawals.map((yearData) => {
+                    const filingStatus = profile.filingStatus || 'single';
+                    // IRMAA uses MAGI from 2 years prior (SSA lookback rule)
+                    const priorYearData = result.yearlyWithdrawals.find(y => y.age === yearData.age - 2);
+                    const irmaaMagi = priorYearData?.magi ?? yearData.magi;
+                    const irmaaSurcharge = yearData.age >= 65
+                      ? getAnnualIRMAASurcharge(irmaaMagi, filingStatus)
+                      : null;
                     return (
                       <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                         <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
@@ -136,8 +145,18 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                           {yearData.socialSecurityIncome > 0 ? formatCurrency(yearData.socialSecurityIncome) : '-'}
                         </td>
                         <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">
+                          {yearData.federalTax > 0 ? formatCurrency(yearData.federalTax) : '-'}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-orange-600 dark:text-orange-400">
+                          {yearData.stateTax > 0 ? formatCurrency(yearData.stateTax) : '-'}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-rose-600 dark:text-rose-400">
+                          {irmaaSurcharge == null ? '-' : irmaaSurcharge > 0 ? formatCurrency(irmaaSurcharge) : '-'}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">
                           {yearData.totalTax > 0 ? formatCurrency(yearData.totalTax) : '-'}
                         </td>
+                        <td className="py-2 px-2 text-right font-mono text-violet-600 dark:text-violet-400">{formatCurrency(yearData.magi)}</td>
                         <td className="py-2 px-2 text-right font-mono text-teal-600 dark:text-teal-400">{formatCurrency(yearData.afterTaxIncome)}</td>
                       </tr>
                     );
@@ -154,8 +173,24 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                       {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.socialSecurityIncome, 0))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
+                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.federalTax, 0))}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-orange-600 dark:text-orange-400">
+                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.stateTax, 0))}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-rose-600 dark:text-rose-400">
+                      {formatCurrency(result.yearlyWithdrawals
+                        .filter(y => y.age >= 65)
+                        .reduce((sum, y) => {
+                          const priorY = result.yearlyWithdrawals.find(p => p.age === y.age - 2);
+                          const irmaaMagi = priorY?.magi ?? y.magi;
+                          return sum + getAnnualIRMAASurcharge(irmaaMagi, profile.filingStatus || 'single');
+                        }, 0))}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
                       {formatCurrency(result.lifetimeTaxesPaid)}
                     </td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-500 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-teal-600 dark:text-teal-400">
                       {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.afterTaxIncome, 0))}
                     </td>
@@ -191,7 +226,7 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                         </td>
                       ))}
                       <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(yearData.totalWithdrawal)}
+                        {formatCurrency(yearData.totalWithdrawal + yearData.rothConversionAmount)}
                       </td>
                     </tr>
                   ))}

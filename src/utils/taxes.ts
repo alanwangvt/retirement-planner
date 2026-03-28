@@ -247,8 +247,8 @@ export function getRoomToNextIRMAAThreshold(
 ): number {
   const thresholds = getIRMAAThresholds(filingStatus);
   
-  // Find current threshold
-  const currentThreshold = thresholds.find(t => currentMAGI >= t.min && currentMAGI < t.max);
+  // SSA uses "greater than" the threshold, so use > min and <= max
+  const currentThreshold = thresholds.find(t => currentMAGI > t.min && currentMAGI <= t.max);
   if (!currentThreshold) {
     // Already at max threshold
     return 0;
@@ -266,15 +266,14 @@ export function getAnnualIRMAASurcharge(
   filingStatus: FilingStatus
 ): number {
   const thresholds = getIRMAAThresholds(filingStatus);
-  
-  const threshold = thresholds.find(t => magi >= t.min && magi < t.max);
-  if (!threshold) {
-    // Use the highest threshold if beyond max
-    const maxThreshold = thresholds[thresholds.length - 1];
-    return (maxThreshold.partBSurcharge + maxThreshold.partDSurcharge) * 12;
-  }
-  
-  return (threshold.partBSurcharge + threshold.partDSurcharge) * 12;
+  // SSA uses "greater than" the threshold, so use > min and <= max
+  const threshold = thresholds.find(t => magi > t.min && magi <= t.max);
+  const surchargePerPerson = threshold
+    ? (threshold.partBSurcharge + threshold.partDSurcharge) * 12
+    : (thresholds[thresholds.length - 1].partBSurcharge + thresholds[thresholds.length - 1].partDSurcharge) * 12;
+  // Both spouses are on Medicare when filing jointly
+  const personCount = filingStatus === 'married_filing_jointly' ? 2 : 1;
+  return surchargePerPerson * personCount;
 }
 
 /**
@@ -290,7 +289,8 @@ export function getIRMAAProximity(
   if (age < MEDICARE_START_AGE - 2) return null;
   
   const thresholds = getIRMAAThresholds(filingStatus);
-  const currentThreshold = thresholds.find(t => currentMAGI >= t.min && currentMAGI < t.max);
+  // SSA uses "greater than" the threshold, so use > min and <= max
+  const currentThreshold = thresholds.find(t => currentMAGI > t.min && currentMAGI <= t.max);
   
   if (!currentThreshold) {
     return { distanceToNext: 0, nextSurchargeAnnual: 0 };
@@ -305,7 +305,8 @@ export function getIRMAAProximity(
   }
   
   const distanceToNext = currentThreshold.max - currentMAGI;
-  const nextSurchargeAnnual = (nextThreshold.partBSurcharge + nextThreshold.partDSurcharge) * 12;
+  const personCount = filingStatus === 'married_filing_jointly' ? 2 : 1;
+  const nextSurchargeAnnual = (nextThreshold.partBSurcharge + nextThreshold.partDSurcharge) * 12 * personCount;
   
   return { distanceToNext, nextSurchargeAnnual };
 }

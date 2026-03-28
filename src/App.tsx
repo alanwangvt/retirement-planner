@@ -18,6 +18,7 @@ import { ChartIncome } from './components/ChartIncome';
 import { ChartTax } from './components/ChartTax';
 import { ChartComposition } from './components/ChartComposition';
 import { MethodologyPanel } from './components/MethodologyPanel';
+import { SsOptimizerPanel } from './components/SsOptimizerPanel';
 import { DataTableAccumulation } from './components/DataTableAccumulation';
 import { DataTableWithdrawal } from './components/DataTableWithdrawal';
 import { v4 as uuidv4 } from 'uuid';
@@ -351,6 +352,26 @@ function AppContent() {
             {expandedSection === 'profile' && (
               <div className="px-4 pb-4">
                 <ProfileForm profile={profile} onChange={setProfile} />
+                {accumulation && (
+                  <SsOptimizerPanel
+                    accounts={accounts}
+                    profile={profile}
+                    assumptions={assumptions}
+                    accumulationResult={accumulation}
+                    countryConfig={countryConfig}
+                    onApply={(startAge, monthlyBenefit) => {
+                      const updatedOptions = (profile.ssBenefitOptions ?? []).map((opt, i) =>
+                        i === 0 ? { ...opt, startAge, monthlyBenefit } : opt
+                      );
+                      setProfile({
+                        ...profile,
+                        socialSecurityStartAge: startAge,
+                        socialSecurityBenefit: monthlyBenefit,
+                        ssBenefitOptions: updatedOptions,
+                      });
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>

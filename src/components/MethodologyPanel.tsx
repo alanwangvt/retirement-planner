@@ -1,4 +1,4 @@
-import { Profile, Assumptions } from '../types';
+import { Profile, Assumptions, SsBenefitOption } from '../types';
 import { useCountry } from '../contexts/CountryContext';
 import {
   TAX_BRACKETS_MFJ,
@@ -112,12 +112,12 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
                 <dd className="font-mono text-gray-900 dark:text-white">{formatPercent(assumptions.retirementReturnRate)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-gray-600 dark:text-gray-400">Annual Roth Conversion</dt>
-                <dd className="font-mono text-gray-900 dark:text-white">{formatCurrency(assumptions.rothConversionAnnualAmount ?? 0, currency)}</dd>
+                <dt className="text-gray-600 dark:text-gray-400">Roth Conversion Strategy</dt>
+                <dd className="font-mono text-gray-900 dark:text-white">{assumptions.rothConversionStrategy ?? 'off'}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-gray-600 dark:text-gray-400">Target Marginal Tax Rate</dt>
-                <dd className="font-mono text-gray-900 dark:text-white">{formatPercent(assumptions.targetMarginalTaxRate ?? 0)}</dd>
+                <dt className="text-gray-600 dark:text-gray-400">Max Conversion Bracket</dt>
+                <dd className="font-mono text-gray-900 dark:text-white">{formatPercent(assumptions.rothConversionTargetRate ?? 0.22)}</dd>
               </div>
             </dl>
           </div>
@@ -337,10 +337,11 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
             ) : (
               <>
                 <code className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded block mb-2 text-gray-800 dark:text-gray-200">
-                  Taxable Income = Traditional Withdrawals + (Social Security × 85%) - Standard Deduction
+                  MAGI = Traditional Withdrawals + Taxable SS + Roth Conversions + Capital Gains{"\n"}
+                  Federal Tax = Income Tax on (MAGI − Standard Deduction) + LTCG Tax on Capital Gains
                 </code>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Progressive brackets applied to taxable income (see table below).
+                  Social Security taxability is calculated using the IRS provisional income formula (0%, 50%, or 85% of SS is taxable depending on total income). Capital gains from taxable accounts are taxed at long-term rates (0%/15%/20%) stacked on top of ordinary income.
                 </p>
               </>
             )}
@@ -611,16 +612,61 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
               <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">Social Security</h4>
               <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                <li>• Your benefit: {formatCurrency(profile.socialSecurityBenefit || 0)}/mo (at start age)</li>
-                <li>• Start age: {profile.socialSecurityStartAge || 67}</li>
-                <li>• Benefits are inflation-adjusted from start age onwards</li>
-                <li>• Up to 85% of benefits are taxable depending on income</li>
-                <li>• Calculator assumes 85% taxable (maximum rate)</li>
+                {profile.ssBenefitOptions && profile.ssBenefitOptions.length > 0 ? (
+                  <>
+                    <li>• <strong className="text-gray-700 dark:text-gray-300">Configured options:</strong></li>
+                    {profile.ssBenefitOptions.map((opt: SsBenefitOption, i: number) => (
+                      <li key={i} className={`ml-3 ${i === 0 ? 'font-medium text-blue-600 dark:text-blue-400' : ''}`}>
+                        {i === 0 ? '★ ' : '  '}Age {opt.startAge}: {formatCurrency(opt.monthlyBenefit)}/mo
+                        {i === 0 ? ' (active in main simulation)' : ''}
+                      </li>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <li>• Your benefit: {formatCurrency(profile.socialSecurityBenefit || 0)}/mo at age {profile.socialSecurityStartAge || 67}</li>
+                  </>
+                )}
+                <li className="mt-2">• Benefits are inflation-adjusted annually from start age</li>
+                <li>• Taxable SS is computed via the IRS provisional income test (0% / 50% / 85%)</li>
+                <li>• Provisional income = Traditional withdrawals + Roth conversions + 50% of SS</li>
               </ul>
             </div>
           )}
         </div>
       </section>
+
+      {/* SS Optimizer */}
+      {!isCanada && (
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Social Security Start Age Optimizer
+          </h3>
+          <div className="space-y-4 text-sm">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+              <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">How It Works</h4>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">
+                For each (start age, monthly benefit) scenario you configure, the optimizer runs a full retirement simulation and ranks outcomes by <strong className="text-gray-700 dark:text-gray-300">total lifetime after-tax wealth</strong>:
+              </p>
+              <code className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded block mb-2 text-gray-800 dark:text-gray-200">
+                Total Wealth = Σ After-Tax Income (each year) + Terminal Portfolio Balance
+              </code>
+              <ul className="space-y-1 text-gray-600 dark:text-gray-400 mt-2">
+                <li>• All Roth conversion, withdrawal, and tax logic is identical across scenarios</li>
+                <li>• The only variable is when SS starts and at what amount</li>
+                <li>• Uses your configured life expectancy — no breakeven analysis</li>
+                <li>• Clicking "Apply" updates the main simulation to the chosen scenario</li>
+              </ul>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+              <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">Why Late Filing Often Wins</h4>
+              <p className="text-gray-600 dark:text-gray-400">
+                Delaying SS (e.g. 62→70) forces more pre-SS Roth conversions at lower brackets, reduces RMD pressure at 73+, and maximizes the inflation-indexed annuity value of SS. However, if your portfolio is small or life expectancy is short, earlier filing may be better — which is why the optimizer runs all scenarios for your specific situation.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Important Notes */}
       <section className="bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 p-6">
@@ -655,7 +701,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
             <>
               <li className="flex gap-2">
                 <span className="flex-shrink-0">*</span>
-                <span>Social Security is assumed 85% taxable (maximum taxable portion).</span>
+                <span>Social Security taxability uses the IRS provisional income formula — up to 85% is taxable at high incomes, but 0% or 50% at lower incomes.</span>
               </li>
               <li className="flex gap-2">
                 <span className="flex-shrink-0">*</span>

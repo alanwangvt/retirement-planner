@@ -41,24 +41,28 @@ export const CAPITAL_GAINS_BRACKETS_SINGLE: TaxBracket[] = [
 
 // 2025 IRMAA Thresholds (Medicare Part B & D Surcharges)
 // Based on Modified Adjusted Gross Income (MAGI) from 2 years prior
-// Surcharges are monthly amounts added to base Medicare premiums
+// Surcharges are monthly amounts added to the base Medicare Part B premium.
+// Source: SSA.gov "Monthly Medicare Premiums for 2026" and SSA POMS HI 01101.020 (updated 12/02/2025).
+// 2026 standard Part B base premium: $202.90/month.
+// Part B surcharges = (total shown on POMS) - $202.90.
+// Part D surcharges are listed directly by SSA (plan premium + surcharge).
 
 export const IRMAA_THRESHOLDS_MFJ: IRMAAThreshold[] = [
-  { min: 0, max: 212000, partBSurcharge: 0, partDSurcharge: 0 },
-  { min: 212000, max: 268000, partBSurcharge: 70.00, partDSurcharge: 12.90 },
-  { min: 268000, max: 330000, partBSurcharge: 175.00, partDSurcharge: 33.30 },
-  { min: 330000, max: 394000, partBSurcharge: 280.00, partDSurcharge: 53.80 },
-  { min: 394000, max: 750000, partBSurcharge: 385.00, partDSurcharge: 74.20 },
-  { min: 750000, max: Infinity, partBSurcharge: 420.00, partDSurcharge: 85.80 },
+  { min: 0,      max: 218000,   partBSurcharge: 0,      partDSurcharge: 0     },
+  { min: 218000, max: 274000,   partBSurcharge: 81.20,  partDSurcharge: 14.50 },
+  { min: 274000, max: 342000,   partBSurcharge: 202.90, partDSurcharge: 37.50 },
+  { min: 342000, max: 410000,   partBSurcharge: 324.60, partDSurcharge: 60.40 },
+  { min: 410000, max: 750000,   partBSurcharge: 446.30, partDSurcharge: 83.30 },
+  { min: 750000, max: Infinity, partBSurcharge: 487.00, partDSurcharge: 91.00 },
 ];
 
 export const IRMAA_THRESHOLDS_SINGLE: IRMAAThreshold[] = [
-  { min: 0, max: 106000, partBSurcharge: 0, partDSurcharge: 0 },
-  { min: 106000, max: 134000, partBSurcharge: 70.00, partDSurcharge: 12.90 },
-  { min: 134000, max: 167000, partBSurcharge: 175.00, partDSurcharge: 33.30 },
-  { min: 167000, max: 200000, partBSurcharge: 280.00, partDSurcharge: 53.80 },
-  { min: 200000, max: 500000, partBSurcharge: 385.00, partDSurcharge: 74.20 },
-  { min: 500000, max: Infinity, partBSurcharge: 420.00, partDSurcharge: 85.80 },
+  { min: 0,      max: 109000,   partBSurcharge: 0,      partDSurcharge: 0     },
+  { min: 109000, max: 137000,   partBSurcharge: 81.20,  partDSurcharge: 14.50 },
+  { min: 137000, max: 171000,   partBSurcharge: 202.90, partDSurcharge: 37.50 },
+  { min: 171000, max: 205000,   partBSurcharge: 324.60, partDSurcharge: 60.40 },
+  { min: 205000, max: 500000,   partBSurcharge: 446.30, partDSurcharge: 83.30 },
+  { min: 500000, max: Infinity, partBSurcharge: 487.00, partDSurcharge: 91.00 },
 ];
 
 // Medicare starts at age 65

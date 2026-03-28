@@ -124,7 +124,7 @@ export function SummaryCards({
   accumulationResult,
   retirementResult,
 }: SummaryCardsProps) {
-  const { country, config: countryConfig } = useCountry();
+  const { config: countryConfig } = useCountry();
   const { totalAtRetirement, breakdownByGroup } = accumulationResult;
   const accountGroupings = countryConfig.getAccountGroupings();
   const {
@@ -421,13 +421,13 @@ export function SummaryCards({
       </div>
 
       {/* Roth Conversion Planning */}
-      {yearlyWithdrawals.length > 0 && (assumptions.rothConversionStrategy === 'auto' || assumptions.rothConversionStrategy === 'aggressive-early') && (
+      {yearlyWithdrawals.length > 0 && assumptions.rothConversionStrategy === 'auto' && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Roth Conversion Planning</h3>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Automatic conversions filling to {formatPercent(assumptions.rothConversionTargetRate ?? 0.22)} bracket or IRMAA limit (first 10 years):
+                Bracket-optimized conversions (ceiling: {formatPercent(assumptions.rothConversionTargetRate ?? 0.22)}, first 10 years):
               </p>
             </div>
             <div className="overflow-x-auto">

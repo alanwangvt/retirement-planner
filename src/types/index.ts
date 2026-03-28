@@ -27,7 +27,7 @@ export type AccountType = USAccountType | CAAccountType;
 
 export type FilingStatus = 'single' | 'married_filing_jointly';
 
-export type RothConversionStrategy = 'off' | 'auto' | 'aggressive-early';
+export type RothConversionStrategy = 'off' | 'auto';
 
 export type TaxTreatment = 'pretax' | 'roth' | 'taxable' | 'hsa';
 
@@ -43,6 +43,11 @@ export interface Account {
   employerMatchLimit?: number; // 401k only, dollar amount
 }
 
+export interface SsBenefitOption {
+  startAge: number;
+  monthlyBenefit: number;
+}
+
 export interface Profile {
   country: CountryCode;
   currentAge: number;
@@ -54,6 +59,7 @@ export interface Profile {
   annualIncome?: number; // For CA RRSP contribution room calculation
   socialSecurityBenefit?: number; // CPP for CA, Social Security for US (monthly at start age)
   socialSecurityStartAge?: number; // CPP/SS start age
+  ssBenefitOptions?: SsBenefitOption[]; // Multiple (startAge, monthlyBenefit) scenarios for optimizer
   secondaryBenefitStartAge?: number; // OAS for CA
   secondaryBenefitAmount?: number; // OAS amount for CA
 }
@@ -96,6 +102,7 @@ export interface YearlyWithdrawal {
   hsaWithdrawal: number;
   socialSecurityIncome: number;
   grossIncome: number;
+  magi: number; // MAGI for tax/IRMAA = traditional withdrawals + taxable SS + Roth conversions
   federalTax: number;
   stateTax: number;
   totalTax: number;

@@ -48,9 +48,10 @@ function CustomTooltip({ active, payload, label, result }: CustomTooltipProps) {
   const yearData = result.yearlyWithdrawals.find(y => y.age === label);
   if (!yearData) return null;
 
-  const effectiveRate = yearData.grossIncome > 0
-    ? ((yearData.totalTax / yearData.grossIncome) * 100).toFixed(1)
+  const effectiveRate = yearData.magi > 0
+    ? ((yearData.federalTax / yearData.magi) * 100).toFixed(1)
     : '0.0';
+  const marginalRate = ((yearData.effectiveMarginalRate ?? 0) * 100).toFixed(0);
 
   return (
     <div className="bg-white dark:bg-gray-800 p-3 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
@@ -70,8 +71,12 @@ function CustomTooltip({ active, payload, label, result }: CustomTooltipProps) {
             <span className="text-gray-900 dark:text-white">{formatTooltipValue(yearData.totalTax)}</span>
           </div>
           <div className="flex justify-between gap-4 text-gray-600 dark:text-gray-400 mt-1">
-            <span>Effective Rate:</span>
+            <span>Effective Fed Rate:</span>
             <span>{effectiveRate}%</span>
+          </div>
+          <div className="flex justify-between gap-4 text-orange-600 dark:text-orange-400 mt-1">
+            <span>Marginal Rate:</span>
+            <span>{marginalRate}%</span>
           </div>
         </div>
       </div>
@@ -86,9 +91,10 @@ export function ChartTax({ result, isDarkMode = false }: ChartTaxProps) {
   const tickLineColor = isDarkMode ? '#4b5563' : '#d1d5db';
   // Transform data for the chart
   const chartData = result.yearlyWithdrawals.map(year => {
-    const effectiveRate = year.grossIncome > 0
-      ? (year.totalTax / year.grossIncome) * 100
+    const effectiveRate = year.magi > 0
+      ? (year.federalTax / year.magi) * 100
       : 0;
+    const marginalRate = (year.effectiveMarginalRate ?? 0) * 100;
 
     return {
       age: year.age,
@@ -96,6 +102,7 @@ export function ChartTax({ result, isDarkMode = false }: ChartTaxProps) {
       stateTax: year.stateTax,
       totalTax: year.totalTax,
       effectiveRate,
+      marginalRate,
     };
   });
 
@@ -153,9 +160,19 @@ export function ChartTax({ result, isDarkMode = false }: ChartTaxProps) {
             yAxisId="right"
             type="monotone"
             dataKey="effectiveRate"
-            name="Effective Rate"
+            name="Effective Fed Rate"
             stroke={CHART_COLORS.tax}
             strokeWidth={2}
+            dot={false}
+          />
+          <Line
+            yAxisId="right"
+            type="stepAfter"
+            dataKey="marginalRate"
+            name="Marginal Rate"
+            stroke="#f97316"
+            strokeWidth={2}
+            strokeDasharray="5 3"
             dot={false}
           />
         </ComposedChart>

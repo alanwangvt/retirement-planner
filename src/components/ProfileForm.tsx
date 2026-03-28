@@ -1,4 +1,4 @@
-import { Profile, FilingStatus } from '../types';
+import { Profile, FilingStatus, SsBenefitOption } from '../types';
 import { NumberInput } from './NumberInput';
 import { Tooltip } from './Tooltip';
 import { useCountry } from '../contexts/CountryContext';
@@ -19,6 +19,53 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       [field]: value,
     });
   };
+
+  // Sync ssBenefitOptions changes and keep the active socialSecurityStartAge/Benefit
+  // in sync with the first row so the main simulation always has a valid scenario.
+  const handleSsOptionChange = (index: number, field: keyof SsBenefitOption, value: number) => {
+    const updated = (profile.ssBenefitOptions ?? []).map((opt, i) =>
+      i === index ? { ...opt, [field]: value } : opt
+    );
+    const first = updated[0];
+    onChange({
+      ...profile,
+      ssBenefitOptions: updated,
+      socialSecurityStartAge: first?.startAge ?? profile.socialSecurityStartAge,
+      socialSecurityBenefit: first?.monthlyBenefit ?? profile.socialSecurityBenefit,
+    });
+  };
+
+  const handleSsOptionAdd = () => {
+    const existing = profile.ssBenefitOptions ?? [];
+    const newOption: SsBenefitOption = {
+      startAge: country === 'CA' ? 65 : 67,
+      monthlyBenefit: 0,
+    };
+    const updated = [...existing, newOption];
+    onChange({
+      ...profile,
+      ssBenefitOptions: updated,
+      socialSecurityStartAge: updated[0].startAge,
+      socialSecurityBenefit: updated[0].monthlyBenefit,
+    });
+  };
+
+  const handleSsOptionRemove = (index: number) => {
+    const updated = (profile.ssBenefitOptions ?? []).filter((_, i) => i !== index);
+    onChange({
+      ...profile,
+      ssBenefitOptions: updated,
+      socialSecurityStartAge: updated[0]?.startAge ?? profile.socialSecurityStartAge,
+      socialSecurityBenefit: updated[0]?.monthlyBenefit ?? profile.socialSecurityBenefit,
+    });
+  };
+
+  // Initialize ssBenefitOptions from existing single-field values on first render
+  const ssOptions: SsBenefitOption[] = profile.ssBenefitOptions ?? (
+    (profile.socialSecurityStartAge || profile.socialSecurityBenefit)
+      ? [{ startAge: profile.socialSecurityStartAge ?? (country === 'CA' ? 65 : 67), monthlyBenefit: profile.socialSecurityBenefit ?? 0 }]
+      : []
+  );
 
   return (
     <div className="space-y-4">
@@ -131,40 +178,60 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
 
       <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mt-6 mb-3">
         {country === 'CA' ? 'CPP (Canada Pension Plan)' : 'Social Security'}
+        <Tooltip text={country === 'CA'
+          ? 'Enter one or more (start age, monthly benefit) scenarios to compare with the optimizer.'
+          : 'Enter one or more (start age, monthly benefit) scenarios to compare with the SS optimizer. The first row is used in the main simulation.'}
+        />
       </h4>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Monthly Benefit at Start Age
-            <Tooltip text={country === 'CA'
-              ? "Your estimated monthly CPP benefit at start age"
-              : "Your estimated monthly Social Security benefit at start age"}
+      <div className="space-y-2">
+        {ssOptions.length > 0 && (
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center mb-1">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Start Age</span>
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Monthly Benefit ($)</span>
+            <span />
+          </div>
+        )}
+        {ssOptions.map((opt, i) => (
+          <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+            <NumberInput
+              value={opt.startAge}
+              onChange={(val) => handleSsOptionChange(i, 'startAge', val)}
+              min={country === 'CA' ? 60 : 62}
+              max={70}
+              defaultValue={country === 'CA' ? 65 : 67}
+              className={inputClassName}
             />
-          </label>
-          <NumberInput
-            value={profile.socialSecurityBenefit || 0}
-            onChange={(val) => handleChange('socialSecurityBenefit', val)}
-            min={0}
-            placeholder="0"
-            defaultValue={0}
-            className={inputClassName}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Start Age
-          </label>
-          <NumberInput
-            value={profile.socialSecurityStartAge || (country === 'CA' ? 65 : 67)}
-            onChange={(val) => handleChange('socialSecurityStartAge', val)}
-            min={country === 'CA' ? 60 : 62}
-            max={70}
-            defaultValue={country === 'CA' ? 65 : 67}
-            className={inputClassName}
-          />
-        </div>
+            <NumberInput
+              value={opt.monthlyBenefit}
+              onChange={(val) => handleSsOptionChange(i, 'monthlyBenefit', val)}
+              min={0}
+              placeholder="0"
+              defaultValue={0}
+              className={inputClassName}
+            />
+            <button
+              type="button"
+              onClick={() => handleSsOptionRemove(i)}
+              className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+              aria-label="Remove"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={handleSsOptionAdd}
+          className="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          + Add option
+        </button>
+        {ssOptions.length > 0 && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            First row is used in the main simulation. Add more rows to enable the SS optimizer.
+          </p>
+        )}
       </div>
 
       {/* OAS Section - Canada Only */}
