@@ -1,7 +1,7 @@
 # Retirement Planner
 
 A comprehensive retirement planning calculator that projects portfolio growth, simulates tax-optimized withdrawals, and visualizes your financial future through retirement.
-
+ 
 ✨Vibe✨ coded with Claude -- check results manually for accuracy.
 
 Hosted at: [https://alanwangvt.github.io/retirement-planner/](https://alanwangvt.github.io/retirement-planner/)
