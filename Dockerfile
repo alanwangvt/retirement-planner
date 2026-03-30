@@ -14,16 +14,16 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Support client-side routing (serve index.html for all routes)
-COPY <<EOF /etc/nginx/conf.d/default.conf
+# Support client-side routing; use $PORT env var (Render sets this, default 80)
+COPY <<'EOF' /etc/nginx/conf.d/default.conf.template
 server {
-    listen 80;
+    listen ${PORT};
     server_name localhost;
     root /usr/share/nginx/html;
     index index.html;
 
     location / {
-        try_files \$uri \$uri/ /index.html;
+        try_files $uri $uri/ /index.html;
     }
 
     # Cache static assets
@@ -35,4 +35,5 @@ server {
 EOF
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Substitute $PORT at startup, then launch nginx
+CMD ["/bin/sh", "-c", "export PORT=${PORT:-80} && envsubst '${PORT}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
