@@ -23,7 +23,7 @@ ENV VITE_FIREBASE_DATABASE_URL=$VITE_FIREBASE_DATABASE_URL
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 # Copy source and build
 COPY . .

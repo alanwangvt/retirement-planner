@@ -215,7 +215,7 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset, isSett
                 </svg>
               </button>
 
-              {/* Dark Mode Toggle */}}
+              {/* Dark Mode Toggle */}
               <button
                 onClick={onToggleDarkMode}
                 className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
