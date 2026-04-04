@@ -3,6 +3,7 @@ import { CountrySelector } from './CountrySelector';
 import { auth } from '../firebase';
 import {
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -15,9 +16,11 @@ interface LayoutProps {
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onReset: () => void;
+  isSettingsOpen: boolean;
+  onToggleSettings: () => void;
 }
 
-export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: LayoutProps) {
+export function Layout({ children, isDarkMode, onToggleDarkMode, onReset, isSettingsOpen, onToggleSettings }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -27,14 +30,24 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    if (!auth) {
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
+
     return unsubscribe;
   }, []);
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) {
+      setError('Authentication is not configured for this deployment. Set VITE_FIREBASE_* environment variables and rebuild the app.');
+      return;
+    }
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
@@ -49,7 +62,21 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
     } catch (err: unknown) {
       const fbError = err as { code?: string; message?: string };
       if (fbError.code === 'auth/email-already-in-use') {
-        setError('Email already in use');
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          setIsSignupOpen(false);
+          setEmail('');
+          setPassword('');
+        } catch (loginErr: unknown) {
+          const loginError = loginErr as { code?: string; message?: string };
+          if (loginError.code === 'auth/wrong-password' || loginError.code === 'auth/invalid-credential') {
+            setError('This email already exists. Please enter the correct password to log in.');
+          } else if (loginError.code === 'auth/too-many-requests') {
+            setError('Too many login attempts. Please try again later.');
+          } else {
+            setError(loginError.message || 'Login failed. Please try again.');
+          }
+        }
       } else if (fbError.code === 'auth/weak-password') {
         setError('Password is too weak (minimum 6 characters)');
       } else {
@@ -61,6 +88,11 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
   };
 
   const handleGoogleSignup = async () => {
+    if (!auth) {
+      setError('Authentication is not configured for this deployment. Set VITE_FIREBASE_* environment variables and rebuild the app.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -78,6 +110,10 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
   };
 
   const handleLogout = async () => {
+    if (!auth) {
+      return;
+    }
+
     try {
       await signOut(auth);
     } catch (err: unknown) {
@@ -163,7 +199,23 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
                 </svg>
               </button>
 
-              {/* Dark Mode Toggle */}
+              {/* Settings Toggle Button */}
+              <button
+                onClick={onToggleSettings}
+                className={`p-2 rounded-lg transition-colors ${
+                  isSettingsOpen
+                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                title={isSettingsOpen ? 'Hide settings panel' : 'Show settings panel'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+
+              {/* Dark Mode Toggle */}}
               <button
                 onClick={onToggleDarkMode}
                 className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -207,6 +259,19 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Reset all data
+                  </button>
+                  <button
+                    onClick={() => {
+                      onToggleSettings();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {isSettingsOpen ? 'Hide settings' : 'Show settings'}
                   </button>
                   <button
                     onClick={() => {

@@ -141,6 +141,10 @@ npm test
 ### Docker
 
 ```bash
+# Configure Firebase first (required for login)
+cp .env.example .env
+# edit .env and set VITE_FIREBASE_* values
+
 # Build and start in production mode
 docker compose up -d --build
 
@@ -152,6 +156,11 @@ docker compose logs -f
 ```
 
 The app will be available at `http://localhost`.
+
+Authentication note:
+- Firebase auth is enabled only when `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, and `VITE_FIREBASE_APP_ID` are set at build time.
+- In Docker, these values are read from `.env` and passed as build args via `docker-compose.yml`.
+- After updating `.env`, rebuild with `docker compose up -d --build`.
 
 ## Project Structure
 

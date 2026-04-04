@@ -130,6 +130,12 @@ function AppContent() {
   // Dark mode
   const [isDarkMode, toggleDarkMode] = useDarkMode();
 
+  // Settings panel visibility
+  const [isSettingsOpen, setIsSettingsOpen] = useLocalStorage<boolean>(
+    'retirement-planner-settings-open',
+    true
+  );
+
   // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -137,6 +143,11 @@ function AppContent() {
 
   // Listen for auth state changes and load Firebase data
   useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
@@ -160,6 +171,7 @@ function AppContent() {
       
       setAuthLoading(false);
     });
+
     return unsubscribe;
   }, []);
 
@@ -257,6 +269,8 @@ function AppContent() {
       isDarkMode={isDarkMode}
       onToggleDarkMode={toggleDarkMode}
       onReset={handleReset}
+      isSettingsOpen={isSettingsOpen}
+      onToggleSettings={() => setIsSettingsOpen(prev => !prev)}
     >
       {authLoading || dataLoading ? (
         // Loading state
@@ -298,8 +312,9 @@ function AppContent() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Panel - Inputs */}
+      <div className={`grid grid-cols-1 gap-6 ${isSettingsOpen ? 'lg:grid-cols-3' : ''}`}>
+        {/* Left Panel - Inputs (Settings) */}
+        {isSettingsOpen && (
         <div className="lg:col-span-1 space-y-4">
           {/* Accounts Section */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -429,9 +444,10 @@ function AppContent() {
             )}
           </div>
         </div>
+        )}
 
         {/* Right Panel - Charts and Results */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={`${isSettingsOpen ? 'lg:col-span-2' : ''} space-y-6`}>
           {accounts.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
               <svg
