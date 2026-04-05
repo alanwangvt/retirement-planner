@@ -123,7 +123,7 @@ export const DEFAULT_PROFILE = {
   region: 'CA', // California
   filingStatus: 'married_filing_jointly' as const,
   stateTaxRate: 0.05,
-  socialSecurityBenefit: 30000,
+  socialSecurityBenefit: 2500,
   socialSecurityStartAge: 67,
 };
 
@@ -133,5 +133,5 @@ export const DEFAULT_ASSUMPTIONS = {
   retirementReturnRate: 0.05,
   rothConversionStrategy: 'off' as const,
   rothConversionTargetRate: 0.22,
-  annualSpendingAtRetirement: undefined,
+  annualSpendingAtRetirement: 100000,
 };
