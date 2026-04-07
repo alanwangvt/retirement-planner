@@ -2,6 +2,8 @@ import { Account, Profile, Assumptions, AccumulationResult, SsBenefitOption } fr
 import { calculateWithdrawals } from './withdrawals';
 import type { CountryConfig } from '../countries';
 
+export type SsOptimizerTarget = 'primary' | 'spouse';
+
 export interface SsOptimizerOptionResult {
   option: SsBenefitOption;
   totalAfterTaxIncome: number;
@@ -20,26 +22,40 @@ export interface SsOptimizerResult {
 /**
  * Run the full retirement simulation for each SS benefit option and rank by
  * total lifetime after-tax wealth = Σ afterTaxIncome + terminal portfolio balance.
+ *
+ * @param target - 'primary' sweeps the primary earner's ssBenefitOptions while keeping
+ *                 the spouse's SS fixed; 'spouse' does the reverse.
  */
 export function runSsOptimizer(
   accounts: Account[],
   profile: Profile,
   assumptions: Assumptions,
   accumulationResult: AccumulationResult,
-  countryConfig?: CountryConfig
+  countryConfig?: CountryConfig,
+  target: SsOptimizerTarget = 'primary'
 ): SsOptimizerResult {
-  const options = profile.ssBenefitOptions ?? [];
+  const options = target === 'primary'
+    ? (profile.ssBenefitOptions ?? [])
+    : (profile.spouseSsBenefitOptions ?? []);
+
   if (options.length === 0) {
-    throw new Error('No SS benefit options configured.');
+    throw new Error(`No SS benefit options configured for ${target}.`);
   }
 
   const results: SsOptimizerOptionResult[] = options.map(option => {
-    // Clone profile with this scenario's SS values
-    const scenarioProfile: Profile = {
-      ...profile,
-      socialSecurityStartAge: option.startAge,
-      socialSecurityBenefit: option.monthlyBenefit,
-    };
+    // Clone profile with only the swept person's SS values changed;
+    // the other person's SS fields remain fixed at whatever is in profile.
+    const scenarioProfile: Profile = target === 'primary'
+      ? {
+          ...profile,
+          socialSecurityStartAge: option.startAge,
+          socialSecurityBenefit: option.monthlyBenefit,
+        }
+      : {
+          ...profile,
+          spouseSocialSecurityStartAge: option.startAge,
+          spouseSocialSecurityBenefit: option.monthlyBenefit,
+        };
 
     const result = calculateWithdrawals(
       accounts,
@@ -80,10 +96,10 @@ export function runSsOptimizer(
     maximumFractionDigits: 0,
   }).format(Math.abs(delta));
 
+  const whoLabel = target === 'spouse' ? 'Spouse' : 'Primary';
   const explanation =
-    `Starting SS at age ${best.option.startAge} ($${best.option.monthlyBenefit.toLocaleString()}/mo) ` +
-    `maximizes lifetime after-tax wealth by ${deltaStr} vs. the next-best option ` +
-    `(age ${secondBest.option.startAge}).`;
+    `${whoLabel} — start SS at age ${best.option.startAge} ($${best.option.monthlyBenefit.toLocaleString()}/mo) ` +
+    `maximizes lifetime after-tax wealth by ${deltaStr} vs. age ${secondBest.option.startAge}.`;
 
   return {
     options: results,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Account, Profile, Assumptions, AccumulationResult } from '../types';
-import { runSsOptimizer, SsOptimizerResult } from '../utils/ssOptimizer';
+import { runSsOptimizer, SsOptimizerResult, SsOptimizerTarget } from '../utils/ssOptimizer';
 import type { CountryConfig } from '../countries';
 
 interface SsOptimizerPanelProps {
@@ -8,7 +8,9 @@ interface SsOptimizerPanelProps {
   profile: Profile;
   assumptions: Assumptions;
   accumulationResult: AccumulationResult;
-  onApply: (startAge: number, monthlyBenefit: number) => void;
+  onApplyPrimary: (startAge: number, monthlyBenefit: number) => void;
+  onApplySpouse?: (startAge: number, monthlyBenefit: number) => void;
+  isMFJ: boolean;
   countryConfig?: CountryConfig;
 }
 
@@ -25,24 +27,34 @@ export function SsOptimizerPanel({
   profile,
   assumptions,
   accumulationResult,
-  onApply,
+  onApplyPrimary,
+  onApplySpouse,
+  isMFJ,
   countryConfig,
 }: SsOptimizerPanelProps) {
   const [result, setResult] = useState<SsOptimizerResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [applied, setApplied] = useState<number | null>(null); // index of applied option
+  const [applied, setApplied] = useState<number | null>(null);
+  const [target, setTarget] = useState<SsOptimizerTarget>('primary');
 
-  const options = profile.ssBenefitOptions ?? [];
-  const canRun = options.length >= 2;
+  const activeOptions = target === 'primary'
+    ? (profile.ssBenefitOptions ?? [])
+    : (profile.spouseSsBenefitOptions ?? []);
+  const canRun = activeOptions.length >= 2;
+
+  const handleTargetChange = (newTarget: SsOptimizerTarget) => {
+    setTarget(newTarget);
+    setResult(null);
+    setApplied(null);
+  };
 
   const handleRun = () => {
     setRunning(true);
     setResult(null);
     setApplied(null);
-    // Use setTimeout to yield to the browser before the heavy computation
     setTimeout(() => {
       try {
-        const r = runSsOptimizer(accounts, profile, assumptions, accumulationResult, countryConfig);
+        const r = runSsOptimizer(accounts, profile, assumptions, accumulationResult, countryConfig, target);
         setResult(r);
       } finally {
         setRunning(false);
@@ -51,28 +63,67 @@ export function SsOptimizerPanel({
   };
 
   const handleApply = (startAge: number, monthlyBenefit: number, idx: number) => {
-    onApply(startAge, monthlyBenefit);
+    if (target === 'spouse' && onApplySpouse) {
+      onApplySpouse(startAge, monthlyBenefit);
+    } else {
+      onApplyPrimary(startAge, monthlyBenefit);
+    }
     setApplied(idx);
   };
 
+  const whoLabel = target === 'spouse' ? 'Spouse' : 'Primary';
+
   return (
     <div className="mt-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h5 className="font-medium text-blue-900 dark:text-blue-200 text-sm">SS Start Age Optimizer</h5>
-          {!canRun && (
-            <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-              Add at least 2 SS options above to enable the optimizer.
-            </p>
-          )}
-        </div>
+      {/* Header row: title + Primary/Spouse toggle */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <h5 className="font-medium text-blue-900 dark:text-blue-200 text-sm">SS Start Age Optimizer</h5>
+        {isMFJ && (
+          <div className="flex rounded-md overflow-hidden border border-blue-300 dark:border-blue-600 text-xs flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => handleTargetChange('primary')}
+              className={`px-2.5 py-1 font-medium transition-colors ${
+                target === 'primary'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-600'
+              }`}
+            >
+              Primary
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTargetChange('spouse')}
+              className={`px-2.5 py-1 font-medium transition-colors border-l border-blue-300 dark:border-blue-600 ${
+                target === 'spouse'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-600'
+              }`}
+            >
+              Spouse
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Hint + Run button row */}
+      <div className="flex items-center justify-between gap-2">
+        {!canRun ? (
+          <p className="text-xs text-blue-700 dark:text-blue-400">
+            {isMFJ
+              ? `Add at least 2 SS options for ${whoLabel} above to enable.`
+              : 'Add at least 2 SS options above to enable.'}
+          </p>
+        ) : (
+          <span />
+        )}
         <button
           type="button"
           onClick={handleRun}
           disabled={!canRun || running}
-          className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
         >
-          {running ? 'Running…' : 'Find Optimal SS Start Age'}
+          {running ? 'Running…' : 'Find Optimal Age'}
         </button>
       </div>
 

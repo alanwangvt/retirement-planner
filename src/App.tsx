@@ -374,15 +374,30 @@ function AppContent() {
                     assumptions={assumptions}
                     accumulationResult={accumulation}
                     countryConfig={countryConfig}
-                    onApply={(startAge, monthlyBenefit) => {
-                      const updatedOptions = (profile.ssBenefitOptions ?? []).map((opt, i) =>
-                        i === 0 ? { ...opt, startAge, monthlyBenefit } : opt
-                      );
+                    isMFJ={profile.filingStatus === 'married_filing_jointly'}
+                    onApplyPrimary={(startAge, monthlyBenefit) => {
+                      const existing = profile.ssBenefitOptions ?? [];
+                      // Move the chosen option to the front so it becomes the active simulation row
+                      const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);
+                      const rest = existing.filter(o => o !== chosen);
+                      const reordered = chosen ? [chosen, ...rest] : existing;
                       setProfile({
                         ...profile,
                         socialSecurityStartAge: startAge,
                         socialSecurityBenefit: monthlyBenefit,
-                        ssBenefitOptions: updatedOptions,
+                        ssBenefitOptions: reordered,
+                      });
+                    }}
+                    onApplySpouse={(startAge, monthlyBenefit) => {
+                      const existing = profile.spouseSsBenefitOptions ?? [];
+                      const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);
+                      const rest = existing.filter(o => o !== chosen);
+                      const reordered = chosen ? [chosen, ...rest] : existing;
+                      setProfile({
+                        ...profile,
+                        spouseSocialSecurityStartAge: startAge,
+                        spouseSocialSecurityBenefit: monthlyBenefit,
+                        spouseSsBenefitOptions: reordered,
                       });
                     }}
                   />
@@ -513,7 +528,7 @@ function AppContent() {
                 <div className="space-y-6">
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                      Account Growth (Age {profile.currentAge} to {profile.retirementAge})
+                      Account Growth (Age {profile.currentAge} to {Math.max(profile.retirementAge, profile.spouseRetirementAge ?? 0)})
                     </h3>
                     <ChartAccumulation accounts={accounts} result={accumulation} isDarkMode={isDarkMode} />
                   </div>

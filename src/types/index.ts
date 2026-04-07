@@ -62,6 +62,12 @@ export interface Profile {
   ssBenefitOptions?: SsBenefitOption[]; // Multiple (startAge, monthlyBenefit) scenarios for optimizer
   secondaryBenefitStartAge?: number; // OAS for CA
   secondaryBenefitAmount?: number; // OAS amount for CA
+  // Spouse fields — US only, relevant when filingStatus === 'married_filing_jointly'
+  spouseCurrentAge?: number;
+  spouseRetirementAge?: number; // spouse may retire at a different age than the primary
+  spouseSocialSecurityBenefit?: number; // monthly at spouseSocialSecurityStartAge
+  spouseSocialSecurityStartAge?: number; // active start age used in the simulation
+  spouseSsBenefitOptions?: SsBenefitOption[]; // scenarios for the spouse SS optimizer
 }
 
 export interface Assumptions {

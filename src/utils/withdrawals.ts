@@ -381,7 +381,7 @@ export function calculateWithdrawals(
         governmentBenefits *= Math.pow(1 + assumptions.inflationRate, yearsFromStartAge);
       }
     } else {
-      // Fallback to US Social Security
+      // Fallback to US Social Security — primary earner
       if (
         profile.socialSecurityBenefit &&
         profile.socialSecurityStartAge &&
@@ -392,6 +392,22 @@ export function calculateWithdrawals(
         const annualStartBenefit = profile.socialSecurityBenefit * 12; // input now monthly
         governmentBenefits = annualStartBenefit *
           Math.pow(1 + assumptions.inflationRate, yearsFromStartAge);
+      }
+
+      // Spouse SS income — only for married filing jointly when spouse fields are set
+      if (
+        profile.filingStatus === 'married_filing_jointly' &&
+        profile.spouseCurrentAge !== undefined &&
+        profile.spouseSocialSecurityBenefit &&
+        profile.spouseSocialSecurityStartAge
+      ) {
+        const spouseAge = profile.spouseCurrentAge + (age - profile.currentAge);
+        if (spouseAge >= profile.spouseSocialSecurityStartAge) {
+          const spouseYearsFromStart = spouseAge - profile.spouseSocialSecurityStartAge;
+          const spouseAnnualBenefit = profile.spouseSocialSecurityBenefit * 12;
+          governmentBenefits += spouseAnnualBenefit *
+            Math.pow(1 + assumptions.inflationRate, spouseYearsFromStart);
+        }
       }
     }
     const socialSecurityIncome = governmentBenefits; // Keep variable name for compatibility

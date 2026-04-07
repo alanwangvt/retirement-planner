@@ -67,6 +67,48 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       : []
   );
 
+  // Spouse SS handlers — mirror primary handlers but write to spouse fields
+  const handleSpouseSsOptionChange = (index: number, field: keyof SsBenefitOption, value: number) => {
+    const updated = (profile.spouseSsBenefitOptions ?? []).map((opt, i) =>
+      i === index ? { ...opt, [field]: value } : opt
+    );
+    const first = updated[0];
+    onChange({
+      ...profile,
+      spouseSsBenefitOptions: updated,
+      spouseSocialSecurityStartAge: first?.startAge ?? profile.spouseSocialSecurityStartAge,
+      spouseSocialSecurityBenefit: first?.monthlyBenefit ?? profile.spouseSocialSecurityBenefit,
+    });
+  };
+
+  const handleSpouseSsOptionAdd = () => {
+    const existing = profile.spouseSsBenefitOptions ?? [];
+    const newOption: SsBenefitOption = { startAge: 67, monthlyBenefit: 0 };
+    const updated = [...existing, newOption];
+    onChange({
+      ...profile,
+      spouseSsBenefitOptions: updated,
+      spouseSocialSecurityStartAge: updated[0].startAge,
+      spouseSocialSecurityBenefit: updated[0].monthlyBenefit,
+    });
+  };
+
+  const handleSpouseSsOptionRemove = (index: number) => {
+    const updated = (profile.spouseSsBenefitOptions ?? []).filter((_, i) => i !== index);
+    onChange({
+      ...profile,
+      spouseSsBenefitOptions: updated,
+      spouseSocialSecurityStartAge: updated[0]?.startAge ?? profile.spouseSocialSecurityStartAge,
+      spouseSocialSecurityBenefit: updated[0]?.monthlyBenefit ?? profile.spouseSocialSecurityBenefit,
+    });
+  };
+
+  const spouseOptions: SsBenefitOption[] = profile.spouseSsBenefitOptions ?? (
+    (profile.spouseSocialSecurityStartAge || profile.spouseSocialSecurityBenefit)
+      ? [{ startAge: profile.spouseSocialSecurityStartAge ?? 67, monthlyBenefit: profile.spouseSocialSecurityBenefit ?? 0 }]
+      : []
+  );
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600 pb-2">Personal Information</h3>
@@ -157,6 +199,38 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
           </div>
         )}
 
+        {country === 'US' && profile.filingStatus === 'married_filing_jointly' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Spouse Current Age
+            </label>
+            <NumberInput
+              value={profile.spouseCurrentAge ?? 35}
+              onChange={(val) => handleChange('spouseCurrentAge', val)}
+              min={18}
+              max={100}
+              defaultValue={35}
+              className={inputClassName}
+            />
+          </div>
+        )}
+
+        {country === 'US' && profile.filingStatus === 'married_filing_jointly' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Spouse Retirement Age
+            </label>
+            <NumberInput
+              value={profile.spouseRetirementAge ?? 65}
+              onChange={(val) => handleChange('spouseRetirementAge', val)}
+              min={18}
+              max={100}
+              defaultValue={65}
+              className={inputClassName}
+            />
+          </div>
+        )}
+
         {country === 'US' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -220,19 +294,83 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={handleSsOptionAdd}
-          className="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          + Add option
-        </button>
+        {ssOptions.length < 3 && (
+          <button
+            type="button"
+            onClick={handleSsOptionAdd}
+            className="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            + Add option
+          </button>
+        )}
         {ssOptions.length > 0 && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
             First row is used in the main simulation. Add more rows to enable the SS optimizer.
           </p>
         )}
       </div>
+
+      {/* Spouse Social Security - US MFJ Only */}
+      {country === 'US' && profile.filingStatus === 'married_filing_jointly' && (
+        <>
+          <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mt-6 mb-3">
+            Spouse Social Security
+            <Tooltip text="Enter one or more (start age, monthly benefit) scenarios for the spouse. The first row is used in the main simulation. Add more rows to enable the spouse SS optimizer." />
+          </h4>
+
+          <div className="space-y-2">
+            {spouseOptions.length > 0 && (
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center mb-1">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Start Age</span>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Monthly Benefit ($)</span>
+                <span />
+              </div>
+            )}
+            {spouseOptions.map((opt, i) => (
+              <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                <NumberInput
+                  value={opt.startAge}
+                  onChange={(val) => handleSpouseSsOptionChange(i, 'startAge', val)}
+                  min={62}
+                  max={70}
+                  defaultValue={67}
+                  className={inputClassName}
+                />
+                <NumberInput
+                  value={opt.monthlyBenefit}
+                  onChange={(val) => handleSpouseSsOptionChange(i, 'monthlyBenefit', val)}
+                  min={0}
+                  placeholder="0"
+                  defaultValue={0}
+                  className={inputClassName}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSpouseSsOptionRemove(i)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                  aria-label="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {spouseOptions.length < 3 && (
+              <button
+                type="button"
+                onClick={handleSpouseSsOptionAdd}
+                className="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                + Add option
+              </button>
+            )}
+            {spouseOptions.length > 0 && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                First row is used in the main simulation. Add more rows to enable the spouse SS optimizer.
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       {/* OAS Section - Canada Only */}
       {country === 'CA' && (

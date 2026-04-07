@@ -32,7 +32,14 @@ export function calculateAccumulation(
   profile: Profile,
   countryConfig: CountryConfig
 ): AccumulationResult {
-  const yearsToRetirement = profile.retirementAge - profile.currentAge;
+  // Primary earner retires at retirementAge — this is when withdrawals start.
+  // If the spouse retires later, we extend the chart to the spouse's retirement
+  // (showing continued growth) while snapshotting finalBalances at the primary's
+  // retirement so the withdrawal simulation starts at the correct point.
+  const primaryYearsToRetirement = profile.retirementAge - profile.currentAge;
+  const householdYearsToRetirement = profile.spouseRetirementAge !== undefined
+    ? Math.max(primaryYearsToRetirement, profile.spouseRetirementAge - profile.currentAge)
+    : primaryYearsToRetirement;
   const currentYear = new Date().getFullYear();
 
   // Initialize balances
@@ -46,6 +53,9 @@ export function calculateAccumulation(
 
   const yearlyBalances: YearlyAccountBalance[] = [];
 
+  // Snapshot of balances at primary's retirement — used to seed the withdrawal sim
+  let finalBalancesAtPrimaryRetirement: Record<string, number> | null = null;
+
   // Record initial state (year 0)
   yearlyBalances.push({
     age: profile.currentAge,
@@ -55,10 +65,12 @@ export function calculateAccumulation(
     contributions: { ...contributions },
   });
 
-  // Project each year
-  for (let i = 1; i <= yearsToRetirement; i++) {
+  // Project each year up to the household retirement age (later of the two)
+  for (let i = 1; i <= householdYearsToRetirement; i++) {
     const age = profile.currentAge + i;
     const year = currentYear + i;
+    // Contributions stop when the primary retires (no account ownership yet)
+    const stillAccumulating = i <= primaryYearsToRetirement;
 
     accounts.forEach(account => {
       const currentBalance = balances[account.id];
@@ -67,19 +79,27 @@ export function calculateAccumulation(
       // 1. Apply investment return to existing balance
       const balanceAfterReturn = currentBalance * (1 + account.returnRate);
 
-      // 2. Add contribution (with employer match if applicable)
-      const employerMatch = calculateEmployerMatch({
-        ...account,
-        annualContribution: currentContribution,
-      });
-      const totalContribution = currentContribution + employerMatch;
+      // 2. Add contribution only during the accumulation phase
+      const employerMatch = stillAccumulating
+        ? calculateEmployerMatch({ ...account, annualContribution: currentContribution })
+        : 0;
+      const totalContribution = stillAccumulating
+        ? currentContribution + employerMatch
+        : 0;
 
       // Update balance
       balances[account.id] = balanceAfterReturn + totalContribution;
 
-      // 3. Grow contribution for next year
-      contributions[account.id] = currentContribution * (1 + account.contributionGrowthRate);
+      // 3. Grow contribution for next year (only matters while accumulating)
+      if (stillAccumulating) {
+        contributions[account.id] = currentContribution * (1 + account.contributionGrowthRate);
+      }
     });
+
+    // Snapshot finalBalances when the primary retires
+    if (i === primaryYearsToRetirement) {
+      finalBalancesAtPrimaryRetirement = { ...balances };
+    }
 
     const totalBalance = Object.values(balances).reduce((sum, b) => sum + b, 0);
 
@@ -101,20 +121,25 @@ export function calculateAccumulation(
     breakdownByGroup[group.id] = 0;
   });
 
-  // Sum up balances for each group
+  // Sum up balances for each group — use the primary-retirement snapshot so the
+  // composition pie reflects what's available at the start of the withdrawal phase.
+  const breakdownSource = finalBalancesAtPrimaryRetirement ?? balances;
   accounts.forEach(account => {
     const accountType = account.type;
-    // Find which group this account belongs to
     const group = accountGroupings.find(g => g.accountTypes.includes(accountType));
     if (group) {
-      breakdownByGroup[group.id] += balances[account.id];
+      breakdownByGroup[group.id] += breakdownSource[account.id];
     }
   });
 
+  // Use the primary-retirement snapshot for the withdrawal simulation.
+  // Falls back to the end-of-loop balances when spouse retires first (or at same time).
+  const withdrawalStartBalances = finalBalancesAtPrimaryRetirement ?? { ...balances };
+
   return {
     yearlyBalances,
-    finalBalances: { ...balances },
-    totalAtRetirement: Object.values(balances).reduce((sum, b) => sum + b, 0),
+    finalBalances: withdrawalStartBalances,
+    totalAtRetirement: Object.values(withdrawalStartBalances).reduce((sum, b) => sum + b, 0),
     breakdownByGroup,
   };
 }
