@@ -27,6 +27,7 @@ import type { CountryConfig } from '../countries';
 interface AccountState {
   id: string;
   type: Account['type'];
+  owner: Account['owner']; // 'primary' | 'spouse' | 'joint' | undefined
   balance: number;
   costBasis: number; // For taxable accounts, tracks original investment
 }
@@ -337,9 +338,8 @@ export function calculateWithdrawals(
   const accountStates: AccountState[] = accounts.map(account => ({
     id: account.id,
     type: account.type,
+    owner: account.owner,
     balance: accumulationResult.finalBalances[account.id] || 0,
-    // For taxable accounts, estimate cost basis as original balance + contributions
-    // (simplified: assume 50% of balance is gains)
     costBasis: getTaxTreatment(account.type) === 'taxable'
       ? (accumulationResult.finalBalances[account.id] || 0) * 0.5
       : 0,
@@ -424,7 +424,16 @@ export function calculateWithdrawals(
     accountStates
       .filter(acc => isTraditionalAccount(acc.type))
       .forEach(acc => {
-        const minWithdrawal = calculateRMD(age, acc.balance, acc.type, countryConfig);
+        // Use the account owner's age for RMD calculations.
+        // Spouse-owned accounts age at the spouse's rate; all others use the primary's age.
+        let ownerAge = age;
+        if (
+          acc.owner === 'spouse' &&
+          profile.spouseCurrentAge !== undefined
+        ) {
+          ownerAge = profile.spouseCurrentAge + (age - profile.currentAge);
+        }
+        const minWithdrawal = calculateRMD(ownerAge, acc.balance, acc.type, countryConfig);
         rmdsByAccount[acc.id] = minWithdrawal;
         totalMinimumWithdrawal += minWithdrawal;
       });

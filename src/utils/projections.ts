@@ -69,8 +69,6 @@ export function calculateAccumulation(
   for (let i = 1; i <= householdYearsToRetirement; i++) {
     const age = profile.currentAge + i;
     const year = currentYear + i;
-    // Contributions stop when the primary retires (no account ownership yet)
-    const stillAccumulating = i <= primaryYearsToRetirement;
 
     accounts.forEach(account => {
       const currentBalance = balances[account.id];
@@ -79,19 +77,28 @@ export function calculateAccumulation(
       // 1. Apply investment return to existing balance
       const balanceAfterReturn = currentBalance * (1 + account.returnRate);
 
-      // 2. Add contribution only during the accumulation phase
-      const employerMatch = stillAccumulating
+      // 2. Determine whether this account's owner is still working.
+      //    - spouse-owned accounts stop at spouseRetirementAge (if set)
+      //    - all others (primary / joint / unset) stop at the primary's retirementAge
+      const owner = account.owner ?? 'primary';
+      let ownerStillWorking: boolean;
+      if (owner === 'spouse' && profile.spouseRetirementAge !== undefined) {
+        const spouseYearsToRetirement = profile.spouseRetirementAge - profile.currentAge;
+        ownerStillWorking = i <= spouseYearsToRetirement;
+      } else {
+        ownerStillWorking = i <= primaryYearsToRetirement;
+      }
+
+      const employerMatch = ownerStillWorking
         ? calculateEmployerMatch({ ...account, annualContribution: currentContribution })
         : 0;
-      const totalContribution = stillAccumulating
-        ? currentContribution + employerMatch
-        : 0;
+      const totalContribution = ownerStillWorking ? currentContribution + employerMatch : 0;
 
       // Update balance
       balances[account.id] = balanceAfterReturn + totalContribution;
 
-      // 3. Grow contribution for next year (only matters while accumulating)
-      if (stillAccumulating) {
+      // 3. Grow contribution for next year (only matters while owner is working)
+      if (ownerStillWorking) {
         contributions[account.id] = currentContribution * (1 + account.contributionGrowthRate);
       }
     });

@@ -31,6 +31,8 @@ export type RothConversionStrategy = 'off' | 'auto';
 
 export type TaxTreatment = 'pretax' | 'roth' | 'taxable' | 'hsa';
 
+export type AccountOwner = 'primary' | 'spouse' | 'joint';
+
 export interface Account {
   id: string;
   name: string;
@@ -41,6 +43,7 @@ export interface Account {
   returnRate: number; // as decimal
   employerMatchPercent?: number; // 401k only, as decimal
   employerMatchLimit?: number; // 401k only, dollar amount
+  owner?: AccountOwner; // undefined / 'primary' treated the same; 'spouse' / 'joint' for MFJ
 }
 
 export interface SsBenefitOption {

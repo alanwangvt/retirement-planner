@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Account, getAccountTypeLabel, getTaxTreatment } from '../types';
+import { Account, Profile, getAccountTypeLabel, getTaxTreatment } from '../types';
 import { AccountForm } from './AccountForm';
 import { CHART_COLORS } from '../utils/constants';
 
 interface AccountListProps {
   accounts: Account[];
+  profile: Profile;
   onAdd: (account: Account) => void;
   onUpdate: (account: Account) => void;
   onDelete: (id: string) => void;
@@ -23,9 +24,11 @@ function getTaxTreatmentColor(type: Account['type']): string {
   return CHART_COLORS[treatment];
 }
 
-export function AccountList({ accounts, onAdd, onUpdate, onDelete }: AccountListProps) {
+export function AccountList({ accounts, profile, onAdd, onUpdate, onDelete }: AccountListProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | undefined>();
+
+  const isMFJ = profile.filingStatus === 'married_filing_jointly';
 
   const handleSave = (account: Account) => {
     if (editingAccount) {
@@ -75,6 +78,7 @@ export function AccountList({ accounts, onAdd, onUpdate, onDelete }: AccountList
             account={editingAccount}
             onSave={handleSave}
             onCancel={handleCancel}
+            isMFJ={isMFJ}
           />
         </div>
       )}
@@ -97,8 +101,13 @@ export function AccountList({ accounts, onAdd, onUpdate, onDelete }: AccountList
                 />
                 <div>
                   <div className="font-medium text-gray-900 dark:text-white">{account.name}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                     {getAccountTypeLabel(account.type)}
+                    {isMFJ && account.owner && account.owner !== 'primary' && (
+                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 capitalize">
+                        {account.owner}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

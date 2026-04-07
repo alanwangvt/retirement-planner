@@ -338,6 +338,7 @@ function AppContent() {
               <div className="px-4 pb-4">
                 <AccountList
                   accounts={accounts}
+                  profile={profile}
                   onAdd={handleAddAccount}
                   onUpdate={handleUpdateAccount}
                   onDelete={handleDeleteAccount}

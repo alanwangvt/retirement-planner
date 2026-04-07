@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Account, AccountType, getAccountTypeLabel, is401k } from '../types';
+import { Account, AccountOwner, AccountType, getAccountTypeLabel, is401k } from '../types';
 import { NumberInput } from './NumberInput';
 import { Tooltip } from './Tooltip';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,6 +9,7 @@ interface AccountFormProps {
   account?: Account;
   onSave: (account: Account) => void;
   onCancel: () => void;
+  isMFJ?: boolean;
 }
 
 const defaultAccount: Omit<Account, 'id'> = {
@@ -23,7 +24,7 @@ const defaultAccount: Omit<Account, 'id'> = {
 const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 dark:text-white";
 const inputErrorClassName = "w-full px-3 py-2 border border-red-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 dark:text-white";
 
-export function AccountForm({ account, onSave, onCancel }: AccountFormProps) {
+export function AccountForm({ account, onSave, onCancel, isMFJ }: AccountFormProps) {
   const { config: countryConfig } = useCountry();
 
   // Initialize form data from account prop (component is re-mounted with key when account changes)
@@ -93,6 +94,12 @@ export function AccountForm({ account, onSave, onCancel }: AccountFormProps) {
   // Show employer match fields for 401k or employer RRSP
   const showEmployerMatchFields = is401k(formData.type) || formData.type === 'employer_rrsp';
 
+  const ownerOptions: { value: AccountOwner; label: string }[] = [
+    { value: 'primary', label: 'Primary' },
+    { value: 'spouse', label: 'Spouse' },
+    { value: 'joint', label: 'Joint' },
+  ];
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -125,6 +132,23 @@ export function AccountForm({ account, onSave, onCancel }: AccountFormProps) {
           ))}
         </select>
       </div>
+
+      {isMFJ && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Account Owner
+          </label>
+          <select
+            value={formData.owner ?? 'primary'}
+            onChange={(e) => handleChange('owner', e.target.value as AccountOwner)}
+            className={inputClassName}
+          >
+            {ownerOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>
