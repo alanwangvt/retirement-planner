@@ -141,7 +141,8 @@ export function SsOptimizerPanel({
                 <tr className="border-b border-blue-200 dark:border-blue-700">
                   <th className="text-left py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Start Age</th>
                   <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Monthly Benefit</th>
-                  <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Lifetime Income</th>
+                  <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Lifetime SS</th>
+                  <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Spendable Income</th>
                   <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Terminal Balance</th>
                   <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Total Wealth</th>
                   <th className="text-right py-1.5 px-2 font-medium text-gray-600 dark:text-gray-300">Taxes Paid</th>
@@ -168,7 +169,10 @@ export function SsOptimizerPanel({
                         ${opt.option.monthlyBenefit.toLocaleString()}/mo
                       </td>
                       <td className="py-1.5 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
-                        {formatCurrency(opt.totalAfterTaxIncome)}
+                        {formatCurrency(opt.lifetimeSocialSecurityIncome)}
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
+                        {formatCurrency(opt.totalSpendableIncome)}
                       </td>
                       <td className="py-1.5 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
                         {formatCurrency(opt.terminalBalance)}

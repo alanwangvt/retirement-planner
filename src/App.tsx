@@ -264,6 +264,153 @@ function AppContent() {
     { id: 'methodology', label: 'Methodology' },
   ];
 
+  const settingsPanelContent = (
+    <>
+      {/* Accounts Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => toggleSection('accounts')}
+          className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+        >
+          <span className="font-medium text-gray-900 dark:text-white">Investment Accounts</span>
+          <svg
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+              expandedSection === 'accounts' ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {expandedSection === 'accounts' && (
+          <div className="px-4 pb-4">
+            <AccountList
+              accounts={accounts}
+              profile={profile}
+              onAdd={handleAddAccount}
+              onUpdate={handleUpdateAccount}
+              onDelete={handleDeleteAccount}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Profile Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => toggleSection('profile')}
+          className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+        >
+          <span className="font-medium text-gray-900 dark:text-white">Personal Profile</span>
+          <svg
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+              expandedSection === 'profile' ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {expandedSection === 'profile' && (
+          <div className="px-4 pb-4">
+            <ProfileForm profile={profile} onChange={setProfile} />
+            {accumulation && (
+              <SsOptimizerPanel
+                accounts={accounts}
+                profile={profile}
+                assumptions={assumptions}
+                accumulationResult={accumulation}
+                countryConfig={countryConfig}
+                isMFJ={profile.filingStatus === 'married_filing_jointly'}
+                onApplyPrimary={(startAge, monthlyBenefit) => {
+                  const existing = profile.ssBenefitOptions ?? [];
+                  const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);
+                  const rest = existing.filter(o => o !== chosen);
+                  const reordered = chosen ? [chosen, ...rest] : existing;
+                  setProfile({
+                    ...profile,
+                    socialSecurityStartAge: startAge,
+                    socialSecurityBenefit: monthlyBenefit,
+                    ssBenefitOptions: reordered,
+                  });
+                }}
+                onApplySpouse={(startAge, monthlyBenefit) => {
+                  const existing = profile.spouseSsBenefitOptions ?? [];
+                  const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);
+                  const rest = existing.filter(o => o !== chosen);
+                  const reordered = chosen ? [chosen, ...rest] : existing;
+                  setProfile({
+                    ...profile,
+                    spouseSocialSecurityStartAge: startAge,
+                    spouseSocialSecurityBenefit: monthlyBenefit,
+                    spouseSsBenefitOptions: reordered,
+                  });
+                }}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Assumptions Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => toggleSection('assumptions')}
+          className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+        >
+          <span className="font-medium text-gray-900 dark:text-white">Economic Assumptions</span>
+          <svg
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+              expandedSection === 'assumptions' ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {expandedSection === 'assumptions' && (
+          <div className="px-4 pb-4">
+            <AssumptionsForm assumptions={assumptions} onChange={setAssumptions} />
+          </div>
+        )}
+      </div>
+
+      {/* Roth Conversion Assumptions */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => toggleSection('roth')}
+          className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+        >
+          <span className="font-medium text-gray-900 dark:text-white">Roth Conversion Assumptions</span>
+          <svg
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+              expandedSection === 'roth' ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {expandedSection === 'roth' && (
+          <div className="px-4 pb-4">
+            <RothConversionForm
+              assumptions={assumptions}
+              onChange={setAssumptions}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <Layout
       isDarkMode={isDarkMode}
@@ -312,158 +459,45 @@ function AppContent() {
         </div>
       )}
 
-      <div className={`grid grid-cols-1 gap-6 ${isSettingsOpen ? 'lg:grid-cols-3' : ''}`}>
-        {/* Left Panel - Inputs (Settings) */}
-        {isSettingsOpen && (
-        <div className="lg:col-span-1 space-y-4">
-          {/* Accounts Section */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => toggleSection('accounts')}
-              className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsSettingsOpen(prev => !prev)}
+          className="hidden lg:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 h-24 w-8 items-center justify-center rounded-r-xl border border-l-0 border-gray-200 bg-white/95 text-gray-600 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95 dark:text-gray-300"
+          title={isSettingsOpen ? 'Collapse input panel' : 'Expand input panel'}
+          aria-label={isSettingsOpen ? 'Collapse input panel' : 'Expand input panel'}
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d={isSettingsOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}
+            />
+          </svg>
+        </button>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
+          <div className="hidden lg:block">
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isSettingsOpen ? 'w-[24rem] opacity-100' : 'w-0 opacity-0 -translate-x-4 pointer-events-none'
+              }`}
             >
-              <span className="font-medium text-gray-900 dark:text-white">Investment Accounts</span>
-              <svg
-                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
-                  expandedSection === 'accounts' ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {expandedSection === 'accounts' && (
-              <div className="px-4 pb-4">
-                <AccountList
-                  accounts={accounts}
-                  profile={profile}
-                  onAdd={handleAddAccount}
-                  onUpdate={handleUpdateAccount}
-                  onDelete={handleDeleteAccount}
-                />
+              <div className="w-[24rem] space-y-4 pr-2">
+                {settingsPanelContent}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Profile Section */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => toggleSection('profile')}
-              className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
-            >
-              <span className="font-medium text-gray-900 dark:text-white">Personal Profile</span>
-              <svg
-                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
-                  expandedSection === 'profile' ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {expandedSection === 'profile' && (
-              <div className="px-4 pb-4">
-                <ProfileForm profile={profile} onChange={setProfile} />
-                {accumulation && (
-                  <SsOptimizerPanel
-                    accounts={accounts}
-                    profile={profile}
-                    assumptions={assumptions}
-                    accumulationResult={accumulation}
-                    countryConfig={countryConfig}
-                    isMFJ={profile.filingStatus === 'married_filing_jointly'}
-                    onApplyPrimary={(startAge, monthlyBenefit) => {
-                      const existing = profile.ssBenefitOptions ?? [];
-                      // Move the chosen option to the front so it becomes the active simulation row
-                      const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);
-                      const rest = existing.filter(o => o !== chosen);
-                      const reordered = chosen ? [chosen, ...rest] : existing;
-                      setProfile({
-                        ...profile,
-                        socialSecurityStartAge: startAge,
-                        socialSecurityBenefit: monthlyBenefit,
-                        ssBenefitOptions: reordered,
-                      });
-                    }}
-                    onApplySpouse={(startAge, monthlyBenefit) => {
-                      const existing = profile.spouseSsBenefitOptions ?? [];
-                      const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);
-                      const rest = existing.filter(o => o !== chosen);
-                      const reordered = chosen ? [chosen, ...rest] : existing;
-                      setProfile({
-                        ...profile,
-                        spouseSocialSecurityStartAge: startAge,
-                        spouseSocialSecurityBenefit: monthlyBenefit,
-                        spouseSsBenefitOptions: reordered,
-                      });
-                    }}
-                  />
-                )}
-              </div>
-            )}
-          </div>
+          {isSettingsOpen && (
+            <div className="space-y-4 lg:hidden">
+              {settingsPanelContent}
+            </div>
+          )}
 
-          {/* Assumptions Section */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => toggleSection('assumptions')}
-              className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
-            >
-              <span className="font-medium text-gray-900 dark:text-white">Economic Assumptions</span>
-              <svg
-                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
-                  expandedSection === 'assumptions' ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {expandedSection === 'assumptions' && (
-              <div className="px-4 pb-4">
-                <AssumptionsForm assumptions={assumptions} onChange={setAssumptions} />
-              </div>
-            )}
-          </div>
-
-          {/* Roth Conversion Assumptions */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => toggleSection('roth')}
-              className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
-            >
-              <span className="font-medium text-gray-900 dark:text-white">Roth Conversion Assumptions</span>
-              <svg
-                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
-                  expandedSection === 'roth' ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {expandedSection === 'roth' && (
-              <div className="px-4 pb-4">
-                <RothConversionForm
-                  assumptions={assumptions}
-                  onChange={setAssumptions}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-        )}
-
-        {/* Right Panel - Charts and Results */}
-        <div className={`${isSettingsOpen ? 'lg:col-span-2' : ''} space-y-6`}>
+          {/* Right Panel - Charts and Results */}
+          <div className="space-y-6 min-w-0">
           {accounts.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
               <svg
@@ -579,6 +613,7 @@ function AppContent() {
               )}
             </>
           )}
+          </div>
         </div>
       </div>
         </>

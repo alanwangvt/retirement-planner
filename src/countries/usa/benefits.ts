@@ -25,7 +25,28 @@ export function calculateSocialSecurityBenefits(
       age: currentAge,
       monthlyAmount: monthlyBenefit,
       annualAmount: annualBenefit,
+      startAge: profile.socialSecurityStartAge,
     });
+  }
+
+  if (
+    profile.filingStatus === 'married_filing_jointly' &&
+    profile.spouseCurrentAge !== undefined &&
+    profile.spouseSocialSecurityBenefit &&
+    profile.spouseSocialSecurityStartAge
+  ) {
+    const spouseAge = profile.spouseCurrentAge + (currentAge - profile.currentAge);
+
+    if (spouseAge >= profile.spouseSocialSecurityStartAge) {
+      const monthlyBenefit = profile.spouseSocialSecurityBenefit;
+      const annualBenefit = monthlyBenefit * 12;
+      benefits.push({
+        age: currentAge,
+        monthlyAmount: monthlyBenefit,
+        annualAmount: annualBenefit,
+        startAge: profile.spouseSocialSecurityStartAge,
+      });
+    }
   }
 
   return benefits;

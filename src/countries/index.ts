@@ -30,6 +30,7 @@ export interface BenefitCalculation {
   age: number;
   monthlyAmount: number;
   annualAmount: number;
+  startAge?: number;
 }
 
 /**

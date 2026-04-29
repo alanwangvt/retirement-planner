@@ -375,7 +375,7 @@ function testWithdrawalPhase(): void {
     lifeExpectancy: 68,
     filingStatus: 'married_filing_jointly',
     stateTaxRate: 0.05,
-    socialSecurityBenefit: 30000,
+    socialSecurityBenefit: 2500,
     socialSecurityStartAge: 67,
   };
 
@@ -412,6 +412,35 @@ function testWithdrawalPhase(): void {
       incomeDiff < 1000,
       `Gross income stays roughly constant ($${age65.grossIncome.toFixed(0)} vs $${age67.grossIncome.toFixed(0)})`
     );
+  }
+
+  console.log('\n--- Spouse Social Security Integration ---');
+
+  const spouseProfileSS: Profile = {
+    currentAge: 65,
+    spouseCurrentAge: 65,
+    retirementAge: 65,
+    lifeExpectancy: 68,
+    filingStatus: 'married_filing_jointly',
+    stateTaxRate: 0.05,
+    socialSecurityBenefit: 2500,
+    socialSecurityStartAge: 67,
+    spouseSocialSecurityBenefit: 2000,
+    spouseSocialSecurityStartAge: 65,
+  };
+
+  const spouseAccumulationSS = calculateAccumulation([account], spouseProfileSS, usConfig);
+  const spouseResultSS = calculateWithdrawals([account], spouseProfileSS, assumptionsSS, spouseAccumulationSS, usConfig);
+
+  const spouseAge65 = spouseResultSS.yearlyWithdrawals.find(y => y.age === 65);
+  const spouseAge67 = spouseResultSS.yearlyWithdrawals.find(y => y.age === 67);
+
+  assert(spouseAge65 !== undefined, 'Has spouse data for age 65');
+  assert(spouseAge67 !== undefined, 'Has spouse data for age 67');
+
+  if (spouseAge65 && spouseAge67) {
+    assertApprox(spouseAge65.socialSecurityIncome, 24000, 0.01, 'Spouse SS is included at age 65');
+    assertApprox(spouseAge67.socialSecurityIncome, 54000, 0.01, 'Primary and spouse SS are both included at age 67');
   }
 
   console.log('\n--- RMD Enforcement Test ---');
@@ -474,7 +503,7 @@ function testIncomeContinuity(): void {
     lifeExpectancy: 90,
     filingStatus: 'married_filing_jointly',
     stateTaxRate: 0.05,
-    socialSecurityBenefit: 30000,
+    socialSecurityBenefit: 2500,
     socialSecurityStartAge: 67,
   };
 
@@ -1083,7 +1112,7 @@ function testInflationConsistency(): void {
     lifeExpectancy: 70,
     filingStatus: 'married_filing_jointly',
     stateTaxRate: 0.05,
-    socialSecurityBenefit: 30000,
+    socialSecurityBenefit: 2500,
     socialSecurityStartAge: 67,
   };
 
@@ -1092,11 +1121,11 @@ function testInflationConsistency(): void {
 
   // SS starts at age 67
   // Years from current age (60) to 67 = 7 years
-  // $30,000 * 1.03^7 = $36,878.33
+  // $30,000/year from a $2,500 monthly benefit, inflated by 3% for 7 years
   const age67 = ssResult.yearlyWithdrawals.find(y => y.age === 67);
 
   if (age67) {
-    const expectedSS = 30000 * Math.pow(1.03, 7);
+    const expectedSS = 2500 * 12 * Math.pow(1.03, 7);
     assertApprox(age67.socialSecurityIncome, expectedSS, 1, 'SS inflated from current age to start age');
   }
 }

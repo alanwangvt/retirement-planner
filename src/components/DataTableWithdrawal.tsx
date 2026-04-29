@@ -22,7 +22,7 @@ function formatCurrency(value: number): string {
 type ViewMode = 'income' | 'withdrawals' | 'balances' | 'conversions';
 
 export function DataTableWithdrawal({ accounts, result, profile }: DataTableWithdrawalProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('income');
 
   if (!result.yearlyWithdrawals.length) return null;

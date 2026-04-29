@@ -102,6 +102,7 @@ export function calculateCanadianRetirementBenefits(
       age: currentAge,
       monthlyAmount: adjustedMonthly,
       annualAmount: adjustedMonthly * 12,
+      startAge: cppStartAge,
     });
   }
 
@@ -125,6 +126,7 @@ export function calculateCanadianRetirementBenefits(
         age: currentAge,
         monthlyAmount: netOAS / 12,
         annualAmount: netOAS,
+        startAge: oasStartAge,
       });
     }
   }

@@ -6,9 +6,10 @@ export type SsOptimizerTarget = 'primary' | 'spouse';
 
 export interface SsOptimizerOptionResult {
   option: SsBenefitOption;
-  totalAfterTaxIncome: number;
+  totalSpendableIncome: number;
+  lifetimeSocialSecurityIncome: number;
   terminalBalance: number;
-  totalWealth: number; // totalAfterTaxIncome + terminalBalance
+  totalWealth: number; // totalSpendableIncome + terminalBalance
   lifetimeTaxesPaid: number;
   portfolioDepletionAge: number | null;
 }
@@ -65,17 +66,22 @@ export function runSsOptimizer(
       countryConfig
     );
 
-    const totalAfterTaxIncome = result.yearlyWithdrawals.reduce(
+    const totalSpendableIncome = result.yearlyWithdrawals.reduce(
       (sum, y) => sum + y.afterTaxIncome,
+      0
+    );
+    const lifetimeSocialSecurityIncome = result.yearlyWithdrawals.reduce(
+      (sum, y) => sum + y.socialSecurityIncome,
       0
     );
     const lastYear = result.yearlyWithdrawals[result.yearlyWithdrawals.length - 1];
     const terminalBalance = lastYear?.totalRemainingBalance ?? 0;
-    const totalWealth = totalAfterTaxIncome + terminalBalance;
+    const totalWealth = totalSpendableIncome + terminalBalance;
 
     return {
       option,
-      totalAfterTaxIncome,
+      totalSpendableIncome,
+      lifetimeSocialSecurityIncome,
       terminalBalance,
       totalWealth,
       lifetimeTaxesPaid: result.lifetimeTaxesPaid,

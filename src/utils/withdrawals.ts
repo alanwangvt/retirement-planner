@@ -83,11 +83,11 @@ function projectRmdOnlyIncome(
     if (countryConfig) {
       // Country config: ask it for benefits at the projected age (returns 0 if not yet started)
       const benefits = countryConfig.calculateRetirementBenefits(profile, projAge, 0);
-      const nominal = benefits.reduce((sum, b) => sum + b.annualAmount, 0);
-      if (nominal <= 0) return 0;
-      // Inflate from when SS is active: if already active, inflate from currentAge; otherwise from ssStartAge
-      const inflateFrom = currentSsIncome > 0 ? currentAge : (ssStartAge ?? projAge);
-      return nominal * Math.pow(1 + assumptions.inflationRate, Math.max(0, projAge - inflateFrom));
+      return benefits.reduce((sum, benefit) => {
+        const benefitStartAge = benefit.startAge ?? (currentSsIncome > 0 ? currentAge : (ssStartAge ?? projAge));
+        const yearsFromStart = Math.max(0, projAge - benefitStartAge);
+        return sum + benefit.annualAmount * Math.pow(1 + assumptions.inflationRate, yearsFromStart);
+      }, 0);
     } else {
       if (currentSsIncome > 0) {
         // SS already active — inflate from current year
@@ -374,11 +374,11 @@ export function calculateWithdrawals(
     if (countryConfig) {
       const benefits = countryConfig.calculateRetirementBenefits(profile, age, 0);
       if (benefits.length > 0) {
-        // Adjust for inflation from start age onwards
-        const startAge = profile.socialSecurityStartAge || age;
-        const yearsFromStartAge = Math.max(0, age - startAge);
-        governmentBenefits = benefits.reduce((sum, b) => sum + b.annualAmount, 0);
-        governmentBenefits *= Math.pow(1 + assumptions.inflationRate, yearsFromStartAge);
+        governmentBenefits = benefits.reduce((sum, benefit) => {
+          const benefitStartAge = benefit.startAge ?? profile.socialSecurityStartAge ?? age;
+          const yearsFromStartAge = Math.max(0, age - benefitStartAge);
+          return sum + benefit.annualAmount * Math.pow(1 + assumptions.inflationRate, yearsFromStartAge);
+        }, 0);
       }
     } else {
       // Fallback to US Social Security — primary earner
