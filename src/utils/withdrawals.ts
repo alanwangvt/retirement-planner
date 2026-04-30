@@ -212,6 +212,7 @@ function performRothConversion(
   currentOrdinaryIncome: number,
   estimatedCapitalGains: number,
   socialSecurityIncome: number,
+  pensionIncome: number,
   targetSpending: number,
   age: number,
   _yearsIntoRetirement: number,
@@ -354,7 +355,7 @@ function performRothConversion(
   const marginalRateOnConversion = getMarginalTaxRate(effectiveOrdinaryIncomeAfterConversion, filingStatus);
   const estimatedTax = maxConversion * marginalRateOnConversion;
   const totalPortfolioBalance = accountStates.reduce((sum, acc) => sum + acc.balance, 0);
-  const cashNeededThisYear = targetSpending + estimatedTax - socialSecurityIncome;
+  const cashNeededThisYear = targetSpending + estimatedTax - socialSecurityIncome - pensionIncome;
   if (totalPortfolioBalance < cashNeededThisYear * 5) {
     result.reason = 'Insufficient assets for safety margin';
     return result;
@@ -494,6 +495,36 @@ export function calculateWithdrawals(
     }
     const socialSecurityIncome = governmentBenefits; // Keep variable name for compatibility
 
+    // Calculate pension income (defined benefit pensions with COLA adjustment)
+    let pensionIncome = 0;
+    // Primary pension
+    if (
+      profile.pensionBenefit &&
+      profile.pensionStartAge &&
+      age >= profile.pensionStartAge
+    ) {
+      const yearsFromPensionStart = age - profile.pensionStartAge;
+      const annualPensionStart = profile.pensionBenefit * 12; // input is monthly
+      const pensioncola = profile.pensionCola ?? 0;
+      pensionIncome += annualPensionStart * Math.pow(1 + pensioncola, yearsFromPensionStart);
+    }
+
+    // Spouse pension (married filing jointly)
+    if (
+      profile.filingStatus === 'married_filing_jointly' &&
+      profile.spouseCurrentAge !== undefined &&
+      profile.spousePensionBenefit &&
+      profile.spousePensionStartAge
+    ) {
+      const spouseAge = profile.spouseCurrentAge + (age - profile.currentAge);
+      if (spouseAge >= profile.spousePensionStartAge) {
+        const spouseYearsFromPensionStart = spouseAge - profile.spousePensionStartAge;
+        const spouseAnnualPensionStart = profile.spousePensionBenefit * 12;
+        const spousePensioncola = profile.spousePensionCola ?? 0;
+        pensionIncome += spouseAnnualPensionStart * Math.pow(1 + spousePensioncola, spouseYearsFromPensionStart);
+      }
+    }
+
     // Calculate minimum required withdrawals (RMD/RRIF) for each traditional account
     // NOTE: Per IRS rules, RMDs are calculated per-account, not on total balance.
     // Each account's RMD is based on that account's prior year-end balance.
@@ -530,7 +561,7 @@ export function calculateWithdrawals(
     //   4. Fall back to more traditional if taxable insufficient
     const filingStatusForConversion = profile.filingStatus || 'single';
     const estimatedFillTarget = assumptions.withdrawalBracketFillTarget ?? 0.12;
-    const spendingGapForEstimate = Math.max(0, targetSpending - socialSecurityIncome - rmdAmount);
+    const spendingGapForEstimate = Math.max(0, targetSpending - socialSecurityIncome - pensionIncome - rmdAmount);
     const taxableAvailable = accountStates
       .filter(acc => getTaxTreatment(acc.type) === 'taxable')
       .reduce((sum, acc) => sum + acc.balance, 0);
@@ -552,7 +583,7 @@ export function calculateWithdrawals(
     // conversion to be oversized, pushing actual MAGI well above the target bracket.
     const estimatedTotalTrad = rmdAmount + tradBracket12Fill + tradFallback;
     const ssBasis = calculateSSTaxableAmount(socialSecurityIncome, estimatedTotalTrad, filingStatusForConversion);
-    const estimatedBaseOrdinaryIncome = estimatedTotalTrad + ssBasis;
+    const estimatedBaseOrdinaryIncome = estimatedTotalTrad + ssBasis + pensionIncome;
     const estimatedTaxableWithdrawal = Math.max(0, Math.min(
       taxableAvailable,
       spendingGapForEstimate - tradBracket12Fill
@@ -567,6 +598,7 @@ export function calculateWithdrawals(
       estimatedBaseOrdinaryIncome, // estimated ordinary income from regular withdrawals + SS
       estimatedCapitalGains,
       socialSecurityIncome,
+      pensionIncome,
       targetSpending,
       age,
       i, // years into retirement for inflation adjustment
@@ -578,6 +610,7 @@ export function calculateWithdrawals(
       targetSpending,
       rmdsByAccount,
       socialSecurityIncome,
+      pensionIncome,
       profile,
       assumptions,
       accountDepletionAges,
@@ -627,6 +660,7 @@ export function calculateWithdrawals(
       taxableWithdrawal: withdrawals.taxableWithdrawal,
       hsaWithdrawal: withdrawals.hsaWithdrawal,
       socialSecurityIncome,
+      pensionIncome,
       grossIncome,
       magi,
       federalTax,
@@ -692,6 +726,7 @@ function cloneAccountStates(accountStates: AccountState[]): AccountState[] {
 function evaluateWithdrawalOutcome(
   withdrawals: WithdrawalResult,
   socialSecurityIncome: number,
+  pensionIncome: number,
   rothConversionAmount: number,
   profile: Profile
 ): WithdrawalOutcome {
@@ -699,10 +734,10 @@ function evaluateWithdrawalOutcome(
   const standardDeduction = getStandardDeduction(filingStatus);
   const ssTaxable = calculateSSTaxableAmount(
     socialSecurityIncome,
-    withdrawals.traditionalWithdrawal + rothConversionAmount,
+    withdrawals.traditionalWithdrawal + rothConversionAmount + pensionIncome,
     filingStatus
   );
-  const ordinaryIncome = withdrawals.traditionalWithdrawal + ssTaxable + rothConversionAmount;
+  const ordinaryIncome = withdrawals.traditionalWithdrawal + ssTaxable + rothConversionAmount + pensionIncome;
   const capitalGains = withdrawals.taxableGains;
   const magi = ordinaryIncome + capitalGains;
   const federalTax = calculateTotalFederalTax(ordinaryIncome, capitalGains, filingStatus);
@@ -720,8 +755,8 @@ function evaluateWithdrawalOutcome(
     federalTax,
     stateTax,
     totalTax,
-    afterTaxIncome: withdrawals.total + socialSecurityIncome - totalTax,
-    grossIncome: withdrawals.traditionalWithdrawal + withdrawals.taxableWithdrawal + rothConversionAmount,
+    afterTaxIncome: withdrawals.total + socialSecurityIncome + pensionIncome - totalTax,
+    grossIncome: withdrawals.traditionalWithdrawal + withdrawals.taxableWithdrawal + rothConversionAmount + pensionIncome,
   };
 }
 
@@ -730,6 +765,7 @@ function solveNetSpendingWithdrawals(
   targetSpending: number,
   rmdsByAccount: Record<string, number>,
   socialSecurityIncome: number,
+  pensionIncome: number,
   profile: Profile,
   assumptions: Assumptions,
   accountDepletionAges: Record<string, number | null>,
@@ -745,6 +781,7 @@ function solveNetSpendingWithdrawals(
       grossTarget,
       rmdsByAccount,
       socialSecurityIncome,
+      pensionIncome,
       profile,
       assumptions,
       { ...accountDepletionAges },
@@ -752,6 +789,7 @@ function solveNetSpendingWithdrawals(
       countryConfig
     ),
     socialSecurityIncome,
+    pensionIncome,
     rothConversionAmount,
     profile
   );
@@ -774,6 +812,7 @@ function solveNetSpendingWithdrawals(
         nextGrossTarget,
         rmdsByAccount,
         socialSecurityIncome,
+        pensionIncome,
         profile,
         assumptions,
         { ...accountDepletionAges },
@@ -781,6 +820,7 @@ function solveNetSpendingWithdrawals(
         countryConfig
       ),
       socialSecurityIncome,
+      pensionIncome,
       rothConversionAmount,
       profile
     );
@@ -815,6 +855,7 @@ function performTaxOptimizedWithdrawal(
   targetSpending: number,
   rmdsByAccount: Record<string, number>,
   socialSecurityIncome: number,
+  pensionIncome: number,
   profile: Profile,
   assumptions: Assumptions,
   accountDepletionAges: Record<string, number | null>,
@@ -835,8 +876,8 @@ function performTaxOptimizedWithdrawal(
     result.byAccount[acc.id] = 0;
   });
 
-  // How much do we need after Social Security?
-  let remainingNeed = Math.max(0, targetSpending - socialSecurityIncome);
+  // How much do we need after Social Security and Pension?
+  let remainingNeed = Math.max(0, targetSpending - socialSecurityIncome - pensionIncome);
 
   // Get account groups - use country config for traditional detection if available
   const isTraditionalAccount = (type: string) =>

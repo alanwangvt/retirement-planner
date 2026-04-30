@@ -26,6 +26,12 @@ const US_ACCOUNT_TYPES: AccountTypeConfig[] = [
     description: 'Individual retirement account with pre-tax contributions',
   },
   {
+    type: 'pension',
+    label: 'Pension',
+    taxTreatment: 'pretax',
+    description: 'Defined benefit or pension account treated as pretax income',
+  },
+  {
     type: 'roth_ira',
     label: 'Roth IRA',
     taxTreatment: 'roth',
@@ -49,6 +55,7 @@ const US_ACCOUNT_TYPES: AccountTypeConfig[] = [
 const USA_WITHDRAWAL_ORDER = [
   'traditional_401k_403b', // RMDs first
   'traditional_ira',
+  'pension',
   'taxable', // Then taxable (favorable cap gains)
   'roth_401k', // Preserve Roth
   'roth_ira',
@@ -61,7 +68,7 @@ const USA_ACCOUNT_GROUPS: AccountGroup[] = [
     id: 'traditional',
     label: 'Traditional Accounts',
     color: CHART_COLORS.pretax,
-    accountTypes: ['traditional_401k_403b', 'traditional_ira'],
+    accountTypes: ['traditional_401k_403b', 'traditional_ira', 'pension'],
     description: 'Pre-tax contributions, taxed on withdrawal',
   },
   {
@@ -157,7 +164,7 @@ export const USConfig: CountryConfig = {
   },
 
   isTraditionalAccount: (accountType: string): boolean => {
-    return accountType === 'traditional_401k_403b' || accountType === 'traditional_ira';
+    return accountType === 'traditional_401k_403b' || accountType === 'traditional_ira' || accountType === 'pension';
   },
 
   supportsEmployerMatch: (accountType: string): boolean => {

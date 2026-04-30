@@ -359,6 +359,118 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
         )}
       </div>
 
+      {/* Pension - US Only */}
+      {country === 'US' && (
+        <>
+          <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mt-6 mb-3">
+            Pension (Defined Benefit)
+            <Tooltip text="Enter your defined benefit pension details. Pension income is a non-portfolio benefit that starts at the specified age and grows annually by the COLA percentage." />
+          </h4>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Monthly Benefit ($)
+              </label>
+              <NumberInput
+                value={profile.pensionBenefit ?? 0}
+                onChange={(val) => handleChange('pensionBenefit', val)}
+                min={0}
+                placeholder="0"
+                defaultValue={0}
+                className={inputClassName}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Start Age
+              </label>
+              <NumberInput
+                value={profile.pensionStartAge ?? 65}
+                onChange={(val) => handleChange('pensionStartAge', val)}
+                min={50}
+                max={85}
+                defaultValue={65}
+                className={inputClassName}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Annual COLA (%)
+              </label>
+              <NumberInput
+                value={profile.pensionCola ?? 0}
+                onChange={(val) => handleChange('pensionCola', val)}
+                min={0}
+                max={10}
+                isPercentage
+                decimals={1}
+                defaultValue={0}
+                className={inputClassName}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Spouse Pension - US MFJ Only */}
+      {country === 'US' && profile.filingStatus === 'married_filing_jointly' && (
+        <>
+          <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mt-6 mb-3">
+            Spouse Pension (Defined Benefit)
+            <Tooltip text="Enter your spouse's defined benefit pension details." />
+          </h4>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Monthly Benefit ($)
+              </label>
+              <NumberInput
+                value={profile.spousePensionBenefit ?? 0}
+                onChange={(val) => handleChange('spousePensionBenefit', val)}
+                min={0}
+                placeholder="0"
+                defaultValue={0}
+                className={inputClassName}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Start Age
+              </label>
+              <NumberInput
+                value={profile.spousePensionStartAge ?? 65}
+                onChange={(val) => handleChange('spousePensionStartAge', val)}
+                min={50}
+                max={85}
+                defaultValue={65}
+                className={inputClassName}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Annual COLA (%)
+              </label>
+              <NumberInput
+                value={profile.spousePensionCola ?? 0}
+                onChange={(val) => handleChange('spousePensionCola', val)}
+                min={0}
+                max={10}
+                isPercentage
+                decimals={1}
+                defaultValue={0}
+                className={inputClassName}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Spouse Social Security - US MFJ Only */}
       {country === 'US' && profile.filingStatus === 'married_filing_jointly' && (
         <>

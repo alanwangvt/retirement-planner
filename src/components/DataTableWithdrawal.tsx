@@ -120,6 +120,7 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Target Spending</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Portfolio Drawdown<Tooltip text="Tax-deferred withdrawals excluding Roth conversions" /></th>
                     <th className="text-right py-2 px-2 font-medium text-indigo-600 dark:text-indigo-400">Social Security</th>
+                    <th className="text-right py-2 px-2 font-medium text-sky-600 dark:text-sky-400">Pension</th>
                     <th className="text-right py-2 px-2 font-medium text-purple-600 dark:text-purple-400" title="MAGI minus standard deduction">Taxable Income</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
@@ -147,6 +148,9 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                         <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.totalWithdrawal)}</td>
                         <td className="py-2 px-2 text-right font-mono text-indigo-600 dark:text-indigo-400">
                           {yearData.socialSecurityIncome > 0 ? formatCurrency(yearData.socialSecurityIncome) : '-'}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-sky-600 dark:text-sky-400">
+                          {yearData.pensionIncome > 0 ? formatCurrency(yearData.pensionIncome) : '-'}
                         </td>
                         <td className="py-2 px-2 text-right font-mono text-purple-600 dark:text-purple-400">
                           {taxableIncome > 0 ? formatCurrency(taxableIncome) : '-'}
@@ -178,6 +182,9 @@ export function DataTableWithdrawal({ accounts, result, profile }: DataTableWith
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-indigo-600 dark:text-indigo-400">
                       {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.socialSecurityIncome, 0))}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-sky-600 dark:text-sky-400">
+                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.pensionIncome, 0))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-gray-500 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">

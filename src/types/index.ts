@@ -5,6 +5,7 @@ export type CountryCode = 'US' | 'CA';
 export type USAccountType =
   | 'traditional_401k_403b'
   | 'traditional_457b'
+  | 'pension'
   | 'roth_401k'
   | 'traditional_ira'
   | 'roth_ira'
@@ -73,6 +74,13 @@ export interface Profile {
   spouseSocialSecurityStartAge?: number; // active start age used in the simulation
   spouseSsBenefitOptions?: SsBenefitOption[]; // scenarios for the spouse SS optimizer
   optimalSpouseSocialSecurityStartAge?: number; // optimizer-recommended spouse SS start age
+  // Pension fields — US only
+  pensionBenefit?: number; // monthly amount (USD) at pensionStartAge
+  pensionStartAge?: number; // age when pension begins
+  pensionCola?: number; // annual cost-of-living adjustment as decimal (e.g., 0.03 for 3%)
+  spousePensionBenefit?: number; // spouse's monthly pension
+  spousePensionStartAge?: number; // spouse pension start age
+  spousePensionCola?: number; // spouse pension COLA
 }
 
 export interface Assumptions {
@@ -112,6 +120,7 @@ export interface YearlyWithdrawal {
   taxableWithdrawal: number;
   hsaWithdrawal: number;
   socialSecurityIncome: number;
+  pensionIncome: number; // annual pension income (indexed for COLA)
   grossIncome: number;
   magi: number; // MAGI for tax/IRMAA = traditional withdrawals + taxable SS + Roth conversions
   federalTax: number;
@@ -171,6 +180,7 @@ export function getTaxTreatment(accountType: AccountType): TaxTreatment {
     // US accounts
     case 'traditional_401k_403b':
     case 'traditional_457b':
+    case 'pension':
     case 'traditional_ira':
       return 'pretax';
     case 'roth_401k':
@@ -204,6 +214,8 @@ export function getAccountTypeLabel(type: AccountType): string {
       return 'Traditional 401(k)/403(b)';
     case 'traditional_457b':
       return 'Traditional 457(b)';
+    case 'pension':
+      return 'Pension';
     case 'roth_401k':
       return 'Roth 401(k)';
     case 'traditional_ira':
@@ -241,5 +253,5 @@ export function is401k(type: AccountType): boolean {
 }
 
 export function isTraditional(type: string): boolean {
-  return type === 'traditional_401k_403b' || type === 'traditional_ira';
+  return type === 'traditional_401k_403b' || type === 'traditional_ira' || type === 'pension';
 }

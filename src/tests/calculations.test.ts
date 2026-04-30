@@ -135,6 +135,8 @@ function testTaxCalculations(): void {
 function testRMDCalculations(): void {
   section('RMD CALCULATIONS');
 
+  assert(usConfig.isTraditionalAccount('pension'), 'Pension is recognized as traditional in US config');
+
   // RMD starts at age 73
   const divisor72 = getRMDDivisor(72);
   assertApprox(divisor72, 0, 0.01, 'No RMD at age 72 (divisor = 0)');
@@ -440,6 +442,69 @@ function testWithdrawalPhase(): void {
   if (spouseAge65 && spouseAge67) {
     assertApprox(spouseAge65.socialSecurityIncome, 24000, 0.01, 'Spouse SS is included at age 65');
     assertApprox(spouseAge67.socialSecurityIncome, 54000, 0.01, 'Primary and spouse SS are both included at age 67');
+  }
+
+  console.log('\n--- Pension Integration ---');
+
+  const pensionProfile: Profile = {
+    currentAge: 65,
+    retirementAge: 65,
+    lifeExpectancy: 69,
+    filingStatus: 'married_filing_jointly',
+    stateTaxRate: 0.05,
+    pensionBenefit: 3000,
+    pensionStartAge: 67,
+    pensionCola: 0.03,
+  };
+
+  const pensionAccumulation = calculateAccumulation([account], pensionProfile, usConfig);
+  const pensionResult = calculateWithdrawals([account], pensionProfile, assumptionsSS, pensionAccumulation, usConfig);
+
+  const pensionAge65 = pensionResult.yearlyWithdrawals.find(y => y.age === 65);
+  const pensionAge67 = pensionResult.yearlyWithdrawals.find(y => y.age === 67);
+  const pensionAge68 = pensionResult.yearlyWithdrawals.find(y => y.age === 68);
+
+  assert(pensionAge65 !== undefined, 'Has pension data for age 65');
+  assert(pensionAge67 !== undefined, 'Has pension data for age 67');
+  assert(pensionAge68 !== undefined, 'Has pension data for age 68');
+
+  if (pensionAge65 && pensionAge67 && pensionAge68) {
+    assertApprox(pensionAge65.pensionIncome, 0, 0.01, 'No pension income before pension start age');
+    assertApprox(pensionAge67.pensionIncome, 36000, 0.01, 'Pension starts at age 67 ($3,000/month)');
+    assertApprox(pensionAge68.pensionIncome, 36000 * 1.03, 0.1, 'Pension COLA grows income after start age');
+    assert(
+      pensionAge67.totalWithdrawal < pensionAge65.totalWithdrawal,
+      `Portfolio withdrawals drop when pension starts ($${pensionAge67.totalWithdrawal.toFixed(0)} < $${pensionAge65.totalWithdrawal.toFixed(0)})`
+    );
+  }
+
+  console.log('\n--- Spouse Pension Integration ---');
+
+  const spousePensionProfile: Profile = {
+    currentAge: 65,
+    spouseCurrentAge: 65,
+    retirementAge: 65,
+    lifeExpectancy: 68,
+    filingStatus: 'married_filing_jointly',
+    stateTaxRate: 0.05,
+    pensionBenefit: 2500,
+    pensionStartAge: 67,
+    spousePensionBenefit: 1000,
+    spousePensionStartAge: 65,
+  };
+
+  const spousePensionAccumulation = calculateAccumulation([account], spousePensionProfile, usConfig);
+  const spousePensionResult = calculateWithdrawals([account], spousePensionProfile, assumptionsSS, spousePensionAccumulation, usConfig);
+
+  const spousePensionAge65 = spousePensionResult.yearlyWithdrawals.find(y => y.age === 65);
+  const spousePensionAge67 = spousePensionResult.yearlyWithdrawals.find(y => y.age === 67);
+
+  assert(spousePensionAge65 !== undefined, 'Has spouse pension data for age 65');
+  assert(spousePensionAge67 !== undefined, 'Has spouse pension data for age 67');
+
+  if (spousePensionAge65 && spousePensionAge67) {
+    assertApprox(spousePensionAge65.pensionIncome, 12000, 0.01, 'Spouse pension included at age 65');
+    assertApprox(spousePensionAge67.pensionIncome, 42000, 0.01, 'Primary + spouse pension included at age 67');
   }
 
   console.log('\n--- RMD Enforcement Test ---');

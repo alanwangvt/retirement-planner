@@ -31,5 +31,5 @@ export function calculateRMD(age: number, balance: number, accountType: string):
  * Check if account type is traditional (subject to RMD)
  */
 function isTraditionalAccount(accountType: string): boolean {
-  return accountType === 'traditional_401k_403b' || accountType === 'traditional_ira';
+  return accountType === 'traditional_401k_403b' || accountType === 'traditional_ira' || accountType === 'pension';
 }

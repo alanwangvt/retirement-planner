@@ -69,6 +69,12 @@ function CustomTooltip({ active, payload, label, result }: CustomTooltipProps) {
             <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.socialSecurityIncome)}</span>
           </div>
         )}
+        {yearData.pensionIncome > 0 && (
+          <div className="flex justify-between gap-4">
+            <span style={{ color: '#0ea5e9' }}>Pension:</span>
+            <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.pensionIncome)}</span>
+          </div>
+        )}
         <div className="flex justify-between gap-4 border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
           <span className="text-gray-600 dark:text-gray-400">Gross Income:</span>
           <span className="font-medium text-gray-900 dark:text-white">{formatTooltipValue(yearData.grossIncome)}</span>
@@ -98,6 +104,7 @@ export function ChartIncome({ result, isDarkMode = false }: ChartIncomeProps) {
     age: year.age,
     withdrawals: year.totalWithdrawal,
     socialSecurity: year.socialSecurityIncome,
+    pension: year.pensionIncome,
     afterTax: year.afterTaxIncome,
     gross: year.grossIncome,
     rmd: year.rmdAmount,
@@ -141,6 +148,13 @@ export function ChartIncome({ result, isDarkMode = false }: ChartIncomeProps) {
             name="Social Security"
             stackId="income"
             fill={CHART_COLORS.socialSecurity}
+            fillOpacity={0.8}
+          />
+          <Bar
+            dataKey="pension"
+            name="Pension"
+            stackId="income"
+            fill="#0ea5e9"
             fillOpacity={0.8}
           />
           {/* After-tax income line - the key metric */}
