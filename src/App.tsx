@@ -140,6 +140,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
+  const [firebaseDataReady, setFirebaseDataReady] = useState(false);
 
   // Listen for auth state changes and load Firebase data
   useEffect(() => {
@@ -149,6 +150,7 @@ function AppContent() {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setFirebaseDataReady(false);
       setUser(currentUser);
       
       if (currentUser) {
@@ -166,7 +168,10 @@ function AppContent() {
           console.error('Error loading user data from Firebase:', error);
         } finally {
           setDataLoading(false);
+          setFirebaseDataReady(true);
         }
+      } else {
+        setFirebaseDataReady(true);
       }
       
       setAuthLoading(false);
@@ -177,7 +182,7 @@ function AppContent() {
 
   // Sync accounts to Firebase when accounts change and user is logged in
   useEffect(() => {
-    if (user && accounts.length > 0) {
+    if (user && firebaseDataReady && accounts.length > 0) {
       const syncAccounts = async () => {
         try {
           await saveAccountsToFirebase(user.uid, accounts);
@@ -187,11 +192,11 @@ function AppContent() {
       };
       syncAccounts();
     }
-  }, [user, accounts]);
+  }, [user, firebaseDataReady, accounts]);
 
   // Sync profile to Firebase when profile changes and user is logged in
   useEffect(() => {
-    if (user && profile) {
+    if (user && firebaseDataReady && profile) {
       const syncProfile = async () => {
         try {
           await saveProfileToFirebase(user.uid, profile);
@@ -201,11 +206,11 @@ function AppContent() {
       };
       syncProfile();
     }
-  }, [user, profile]);
+  }, [user, firebaseDataReady, profile]);
 
   // Sync assumptions to Firebase when assumptions change and user is logged in
   useEffect(() => {
-    if (user && assumptions) {
+    if (user && firebaseDataReady && assumptions) {
       const syncAssumptions = async () => {
         try {
           await saveAssumptionsToFirebase(user.uid, assumptions);
@@ -215,7 +220,7 @@ function AppContent() {
       };
       syncAssumptions();
     }
-  }, [user, assumptions]);
+  }, [user, firebaseDataReady, assumptions]);
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -326,6 +331,20 @@ function AppContent() {
                 accumulationResult={accumulation}
                 countryConfig={countryConfig}
                 isMFJ={profile.filingStatus === 'married_filing_jointly'}
+                onBestOption={(target, startAge) => {
+                  if (target === 'spouse') {
+                    setProfile({
+                      ...profile,
+                      optimalSpouseSocialSecurityStartAge: startAge,
+                    });
+                    return;
+                  }
+
+                  setProfile({
+                    ...profile,
+                    optimalSocialSecurityStartAge: startAge,
+                  });
+                }}
                 onApplyPrimary={(startAge, monthlyBenefit) => {
                   const existing = profile.ssBenefitOptions ?? [];
                   const chosen = existing.find(o => o.startAge === startAge && o.monthlyBenefit === monthlyBenefit);

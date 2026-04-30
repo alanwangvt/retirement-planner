@@ -27,7 +27,7 @@ export type AccountType = USAccountType | CAAccountType;
 
 export type FilingStatus = 'single' | 'married_filing_jointly';
 
-export type RothConversionStrategy = 'off' | 'auto';
+export type RothConversionStrategy = 'off' | 'auto' | 'dynamic_low_magi';
 
 export type TaxTreatment = 'pretax' | 'roth' | 'taxable' | 'hsa';
 
@@ -63,6 +63,7 @@ export interface Profile {
   socialSecurityBenefit?: number; // CPP for CA, Social Security for US (monthly at start age)
   socialSecurityStartAge?: number; // CPP/SS start age
   ssBenefitOptions?: SsBenefitOption[]; // Multiple (startAge, monthlyBenefit) scenarios for optimizer
+  optimalSocialSecurityStartAge?: number; // optimizer-recommended primary CPP/SS start age
   secondaryBenefitStartAge?: number; // OAS for CA
   secondaryBenefitAmount?: number; // OAS amount for CA
   // Spouse fields — US only, relevant when filingStatus === 'married_filing_jointly'
@@ -71,6 +72,7 @@ export interface Profile {
   spouseSocialSecurityBenefit?: number; // monthly at spouseSocialSecurityStartAge
   spouseSocialSecurityStartAge?: number; // active start age used in the simulation
   spouseSsBenefitOptions?: SsBenefitOption[]; // scenarios for the spouse SS optimizer
+  optimalSpouseSocialSecurityStartAge?: number; // optimizer-recommended spouse SS start age
 }
 
 export interface Assumptions {

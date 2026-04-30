@@ -50,13 +50,24 @@ export function RothConversionForm({ assumptions, onChange }: RothConversionForm
             />
             <span className="text-sm text-gray-900 dark:text-white">Auto - Bracket-optimized conversions</span>
           </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="rothConversionStrategy"
+              value="dynamic_low_magi"
+              checked={strategy === 'dynamic_low_magi'}
+              onChange={(e) => handleChange('rothConversionStrategy', e.target.value as RothConversionStrategy)}
+              className="text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-900 dark:text-white">Dynamic - Prefer all low-MAGI years</span>
+          </label>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-          Auto uses a two-pass algorithm each year: it first projects future forced income (RMDs + Social Security) to identify your peak future marginal rate, then converts up to the highest bracket that is both justified by that future rate and within your Max Conversion Bracket ceiling. The standard deduction floor is always filled at 0% cost. IRMAA tiers are only crossed when the resulting tax savings exceed the Medicare surcharge.
+          Auto uses a two-pass algorithm each year: it first projects future forced income (RMDs + Social Security) to identify your peak future marginal rate, then converts up to the highest bracket that is both justified by that future rate and within your Max Conversion Bracket ceiling. Dynamic mode compares this year against all remaining projected years and defers conversions when lower-MAGI windows are expected later. The standard deduction floor is always filled at 0% cost.
         </p>
       </div>
 
-      {strategy === 'auto' && (
+      {(strategy === 'auto' || strategy === 'dynamic_low_magi') && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Max Conversion Bracket (%)

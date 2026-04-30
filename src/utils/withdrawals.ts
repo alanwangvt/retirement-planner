@@ -13,6 +13,7 @@ import {
   calculateTotalFederalTax,
   calculateStateTax,
   calculateSSTaxableAmount,
+  getSSOrdinaryIncomeMultiplier,
   getStandardDeduction,
   getCapitalGainsBrackets,
   getMarginalTaxRate,
@@ -22,6 +23,7 @@ import {
   getIRMAAProximity,
 } from './taxes';
 import { getRMDDivisor, RMD_START_AGE } from './constants';
+import { MEDICARE_START_AGE } from '../countries/usa/constants';
 import type { CountryConfig } from '../countries';
 
 interface AccountState {
@@ -46,6 +48,28 @@ interface YearProjection {
   rmd: number;
   ssIncome: number;
   ordinaryIncome: number; // rmd + taxable SS portion
+}
+
+function estimatePerDollarConversionCost(
+  ordinaryIncome: number,
+  ssIncome: number,
+  age: number,
+  filingStatus: FilingStatus,
+  irmaaRelevantMAGI: number
+): number {
+  const ssMultiplier = getSSOrdinaryIncomeMultiplier(ssIncome, ordinaryIncome, filingStatus);
+  const marginalRate = getMarginalTaxRate(ordinaryIncome + ssMultiplier, filingStatus);
+  let irmaaPerDollarPenalty = 0;
+
+  if (age >= MEDICARE_START_AGE - 2) {
+    const proximity = getIRMAAProximity(irmaaRelevantMAGI, age, filingStatus);
+    const room = getRoomToNextIRMAAThreshold(irmaaRelevantMAGI, filingStatus);
+    if (proximity && room > 0 && Number.isFinite(room)) {
+      irmaaPerDollarPenalty = proximity.nextSurchargeAnnual / room;
+    }
+  }
+
+  return marginalRate * ssMultiplier + irmaaPerDollarPenalty;
 }
 
 /**
@@ -154,7 +178,7 @@ function computeAutoTargetBracket(
   projections: YearProjection[],
   filingStatus: FilingStatus,
   comfortMaxBracket: number
-): { targetRate: number; peakFutureRate: number } {
+) : { targetRate: number; peakFutureRate: number } {
   let peakFutureRate = 0;
   for (const proj of projections) {
     const rate = getMarginalTaxRate(proj.ordinaryIncome, filingStatus);
@@ -186,6 +210,7 @@ function performRothConversion(
   assumptions: Assumptions,
   profile: Profile,
   currentOrdinaryIncome: number,
+  estimatedCapitalGains: number,
   socialSecurityIncome: number,
   targetSpending: number,
   age: number,
@@ -244,11 +269,66 @@ function performRothConversion(
     limitingFactor = '0% floor (below standard deduction)';
   }
 
-  // IRMAA check: cross tier only if tax savings on the crossing amount > one-time IRMAA surcharge
-  const irmaaProximity = getIRMAAProximity(currentOrdinaryIncome, age, filingStatus);
-  const roomToIRMAA = getRoomToNextIRMAAThreshold(currentOrdinaryIncome, filingStatus);
+  // SS taxation can amplify ordinary income by 1.5x/1.85x in the torpedo zone.
+  // Adjust conversion room to avoid overshooting the intended bracket target.
+  const ssIncomeMultiplier = getSSOrdinaryIncomeMultiplier(
+    socialSecurityIncome,
+    currentOrdinaryIncome,
+    filingStatus
+  );
+  maxConversion = maxConversion / ssIncomeMultiplier;
 
-  if (irmaaProximity && roomToIRMAA < maxConversion) {
+  const currentMAGI = currentOrdinaryIncome + estimatedCapitalGains;
+
+  if (strategy === 'dynamic_low_magi' && age >= 70) {
+    // Only apply deferral logic in later years (approaching high-MAGI phase at 73)
+    // In early retirement, behave like auto strategy and fill the user-specified bracket
+    const currentCost = estimatePerDollarConversionCost(
+      currentOrdinaryIncome,
+      socialSecurityIncome,
+      age,
+      filingStatus,
+      currentMAGI
+    );
+    const futureCosts = projections
+      .filter(p => p.age > age)
+      .map(p => estimatePerDollarConversionCost(
+        p.ordinaryIncome,
+        p.ssIncome,
+        p.age,
+        filingStatus,
+        p.ordinaryIncome
+      ))
+      .sort((a, b) => a - b);
+
+    if (futureCosts.length > 0) {
+      const medianFutureCost = futureCosts[Math.floor(futureCosts.length / 2)];
+      const bestFutureCost = futureCosts[0];
+      const stdDedFloor = stdDedRoom / Math.max(1, ssIncomeMultiplier);
+
+      // Defer discretionary conversions when projected future years are materially cheaper.
+      if (currentCost > bestFutureCost + 0.03) {
+        maxConversion = Math.min(maxConversion, stdDedFloor);
+        limitingFactor = `Dynamic deferral (current ${(currentCost * 100).toFixed(1)}% > future ${(bestFutureCost * 100).toFixed(1)}%)`;
+      } else if (currentCost > medianFutureCost + 0.01) {
+        maxConversion = Math.min(maxConversion, stdDedFloor + (maxConversion - stdDedFloor) * 0.4);
+        limitingFactor = `Dynamic partial deferral (current ${(currentCost * 100).toFixed(1)}% > median future ${(medianFutureCost * 100).toFixed(1)}%)`;
+      }
+    }
+  }
+
+  // IRMAA check: cross tier only if tax savings on the crossing amount > one-time IRMAA surcharge
+  const irmaaProximity = getIRMAAProximity(currentMAGI, age, filingStatus);
+  const roomToIRMAA = getRoomToNextIRMAAThreshold(currentMAGI, filingStatus);
+
+  // From age 63 onward, avoid crossing IRMAA tiers.
+  // This keeps conversions from pushing MAGI into higher Medicare surcharge bands.
+  if (age >= MEDICARE_START_AGE - 2) {
+    if (roomToIRMAA < maxConversion) {
+      maxConversion = roomToIRMAA;
+      limitingFactor = 'IRMAA guardrail (age 63+)';
+    }
+  } else if (irmaaProximity && roomToIRMAA < maxConversion) {
     const amountAboveThreshold = maxConversion - roomToIRMAA;
     const rateAtThreshold = getMarginalTaxRate(currentOrdinaryIncome + roomToIRMAA, filingStatus);
     const taxSavings = amountAboveThreshold * Math.max(0, peakFutureRate - rateAtThreshold);
@@ -269,7 +349,9 @@ function performRothConversion(
   }
 
   // Safety margin: require at least 5× annual cash need in portfolio
-  const marginalRateOnConversion = getMarginalTaxRate(currentOrdinaryIncome + maxConversion, filingStatus);
+  const effectiveOrdinaryIncomeAfterConversion =
+    currentOrdinaryIncome + maxConversion * ssIncomeMultiplier;
+  const marginalRateOnConversion = getMarginalTaxRate(effectiveOrdinaryIncomeAfterConversion, filingStatus);
   const estimatedTax = maxConversion * marginalRateOnConversion;
   const totalPortfolioBalance = accountStates.reduce((sum, acc) => sum + acc.balance, 0);
   const cashNeededThisYear = targetSpending + estimatedTax - socialSecurityIncome;
@@ -335,7 +417,7 @@ export function calculateWithdrawals(
   const retirementStartYear = currentYear + (profile.retirementAge - profile.currentAge);
 
   // Initialize account states with final balances from accumulation
-  const accountStates: AccountState[] = accounts.map(account => ({
+  let accountStates: AccountState[] = accounts.map(account => ({
     id: account.id,
     type: account.type,
     owner: account.owner,
@@ -452,6 +534,12 @@ export function calculateWithdrawals(
     const taxableAvailable = accountStates
       .filter(acc => getTaxTreatment(acc.type) === 'taxable')
       .reduce((sum, acc) => sum + acc.balance, 0);
+    const taxableUnrealizedGains = accountStates
+      .filter(acc => getTaxTreatment(acc.type) === 'taxable')
+      .reduce((sum, acc) => sum + Math.max(0, acc.balance - acc.costBasis), 0);
+    const estimatedGainRatio = taxableAvailable > 0
+      ? Math.max(0, Math.min(1, taxableUnrealizedGains / taxableAvailable))
+      : 0;
 
     // Pass 1: rough traditional estimate using RMD-only as the SS provisional income base.
     const ssBasisPass1 = calculateSSTaxableAmount(socialSecurityIncome, rmdAmount, filingStatusForConversion);
@@ -465,6 +553,11 @@ export function calculateWithdrawals(
     const estimatedTotalTrad = rmdAmount + tradBracket12Fill + tradFallback;
     const ssBasis = calculateSSTaxableAmount(socialSecurityIncome, estimatedTotalTrad, filingStatusForConversion);
     const estimatedBaseOrdinaryIncome = estimatedTotalTrad + ssBasis;
+    const estimatedTaxableWithdrawal = Math.max(0, Math.min(
+      taxableAvailable,
+      spendingGapForEstimate - tradBracket12Fill
+    ));
+    const estimatedCapitalGains = estimatedTaxableWithdrawal * estimatedGainRatio;
 
     // Perform Roth conversion before regular withdrawals
     const rothConversion = performRothConversion(
@@ -472,6 +565,7 @@ export function calculateWithdrawals(
       assumptions,
       profile,
       estimatedBaseOrdinaryIncome, // estimated ordinary income from regular withdrawals + SS
+      estimatedCapitalGains,
       socialSecurityIncome,
       targetSpending,
       age,
@@ -479,30 +573,30 @@ export function calculateWithdrawals(
       countryConfig
     );
 
-    const withdrawals = performTaxOptimizedWithdrawal(
-      accountStates, targetSpending, rmdsByAccount, socialSecurityIncome,
-      profile, assumptions, accountDepletionAges, age, countryConfig
+    const { accountStates: postWithdrawalStates, outcome } = solveNetSpendingWithdrawals(
+      accountStates,
+      targetSpending,
+      rmdsByAccount,
+      socialSecurityIncome,
+      profile,
+      assumptions,
+      accountDepletionAges,
+      age,
+      rothConversion.conversionAmount,
+      countryConfig
     );
+    accountStates = postWithdrawalStates;
 
     const filingStatusFS = profile.filingStatus || 'single';
-    const stdDed = getStandardDeduction(filingStatusFS);
-    const ssTaxable = calculateSSTaxableAmount(
-      socialSecurityIncome,
-      withdrawals.traditionalWithdrawal + rothConversion.conversionAmount,
-      filingStatusFS
-    );
-    const ordinaryIncome = withdrawals.traditionalWithdrawal + ssTaxable + rothConversion.conversionAmount;
-    const capitalGains = withdrawals.taxableGains;
-    // MAGI includes capital gains (they count toward IRMAA thresholds)
-    const magi = ordinaryIncome + capitalGains;
-    const federalTax = calculateTotalFederalTax(ordinaryIncome, capitalGains, filingStatusFS);
-    // Most states tax capital gains as ordinary income
-    const stateTax = calculateStateTax(Math.max(0, ordinaryIncome + capitalGains - stdDed), profile.stateTaxRate || 0);
-    const totalTax = federalTax + stateTax;
+    const withdrawals = outcome.withdrawals;
+    const ordinaryIncome = outcome.ordinaryIncome;
+    const magi = outcome.magi;
+    const federalTax = outcome.federalTax;
+    const stateTax = outcome.stateTax;
+    const totalTax = outcome.totalTax;
     lifetimeTaxesPaid += totalTax;
-    const afterTaxIncome = withdrawals.total + socialSecurityIncome - totalTax;
-    const grossIncome = withdrawals.traditionalWithdrawal + withdrawals.taxableWithdrawal +
-                        rothConversion.conversionAmount;
+    const afterTaxIncome = outcome.afterTaxIncome;
+    const grossIncome = outcome.grossIncome;
 
     // Apply investment returns to remaining balances after finalised withdrawals
     accountStates.forEach(acc => {
@@ -579,6 +673,130 @@ interface WithdrawalResult {
   byAccount: Record<string, number>;
 }
 
+interface WithdrawalOutcome {
+  withdrawals: WithdrawalResult;
+  ordinaryIncome: number;
+  capitalGains: number;
+  magi: number;
+  federalTax: number;
+  stateTax: number;
+  totalTax: number;
+  afterTaxIncome: number;
+  grossIncome: number;
+}
+
+function cloneAccountStates(accountStates: AccountState[]): AccountState[] {
+  return accountStates.map(acc => ({ ...acc }));
+}
+
+function evaluateWithdrawalOutcome(
+  withdrawals: WithdrawalResult,
+  socialSecurityIncome: number,
+  rothConversionAmount: number,
+  profile: Profile
+): WithdrawalOutcome {
+  const filingStatus = profile.filingStatus || 'single';
+  const standardDeduction = getStandardDeduction(filingStatus);
+  const ssTaxable = calculateSSTaxableAmount(
+    socialSecurityIncome,
+    withdrawals.traditionalWithdrawal + rothConversionAmount,
+    filingStatus
+  );
+  const ordinaryIncome = withdrawals.traditionalWithdrawal + ssTaxable + rothConversionAmount;
+  const capitalGains = withdrawals.taxableGains;
+  const magi = ordinaryIncome + capitalGains;
+  const federalTax = calculateTotalFederalTax(ordinaryIncome, capitalGains, filingStatus);
+  const stateTax = calculateStateTax(
+    Math.max(0, ordinaryIncome + capitalGains - standardDeduction),
+    profile.stateTaxRate || 0
+  );
+  const totalTax = federalTax + stateTax;
+
+  return {
+    withdrawals,
+    ordinaryIncome,
+    capitalGains,
+    magi,
+    federalTax,
+    stateTax,
+    totalTax,
+    afterTaxIncome: withdrawals.total + socialSecurityIncome - totalTax,
+    grossIncome: withdrawals.traditionalWithdrawal + withdrawals.taxableWithdrawal + rothConversionAmount,
+  };
+}
+
+function solveNetSpendingWithdrawals(
+  accountStates: AccountState[],
+  targetSpending: number,
+  rmdsByAccount: Record<string, number>,
+  socialSecurityIncome: number,
+  profile: Profile,
+  assumptions: Assumptions,
+  accountDepletionAges: Record<string, number | null>,
+  age: number,
+  rothConversionAmount: number,
+  countryConfig?: CountryConfig
+): { accountStates: AccountState[]; outcome: WithdrawalOutcome } {
+  let grossTarget = targetSpending;
+  let bestAccountStates = cloneAccountStates(accountStates);
+  let bestOutcome = evaluateWithdrawalOutcome(
+    performTaxOptimizedWithdrawal(
+      bestAccountStates,
+      grossTarget,
+      rmdsByAccount,
+      socialSecurityIncome,
+      profile,
+      assumptions,
+      { ...accountDepletionAges },
+      age,
+      countryConfig
+    ),
+    socialSecurityIncome,
+    rothConversionAmount,
+    profile
+  );
+
+  for (let iteration = 0; iteration < 6; iteration++) {
+    const shortfall = targetSpending - bestOutcome.afterTaxIncome;
+    if (shortfall <= 1) {
+      return { accountStates: bestAccountStates, outcome: bestOutcome };
+    }
+
+    const nextGrossTarget = grossTarget + shortfall;
+    if (nextGrossTarget <= grossTarget + 1) {
+      break;
+    }
+
+    const trialAccountStates = cloneAccountStates(accountStates);
+    const trialOutcome = evaluateWithdrawalOutcome(
+      performTaxOptimizedWithdrawal(
+        trialAccountStates,
+        nextGrossTarget,
+        rmdsByAccount,
+        socialSecurityIncome,
+        profile,
+        assumptions,
+        { ...accountDepletionAges },
+        age,
+        countryConfig
+      ),
+      socialSecurityIncome,
+      rothConversionAmount,
+      profile
+    );
+
+    if (trialOutcome.afterTaxIncome <= bestOutcome.afterTaxIncome + 1) {
+      break;
+    }
+
+    grossTarget = nextGrossTarget;
+    bestAccountStates = trialAccountStates;
+    bestOutcome = trialOutcome;
+  }
+
+  return { accountStates: bestAccountStates, outcome: bestOutcome };
+}
+
 /**
  * Perform tax-optimized withdrawal strategy based on comprehensive tax rules:
  * 
@@ -653,98 +871,27 @@ function performTaxOptimizedWithdrawal(
     }
   }
 
-  // Step 2: RULE 3 - Fill up to target bracket with additional traditional withdrawals.
-  // Always runs regardless of taxableFirstSpendingAge — filling the low bracket now (0-12%)
-  // prevents larger forced RMDs later at higher rates. Taxable accounts cover remaining
-  // spending above the bracket fill in Step 3.
+  // Detect if this is a high-MAGI year (RMD present)
+  // RMD starts at age 73, so only reorder withdrawals when RMD is actually being taken
+  const totalRMDs = Object.values(rmdsByAccount).reduce((sum, rmd) => sum + Math.max(0, rmd), 0);
+  const hasRMD = totalRMDs > 0;
+  const isHighMagiYear = hasRMD;
+  const useDynamicLowMagiReordering = assumptions.rothConversionStrategy === 'dynamic_low_magi' && isHighMagiYear;
+
   const filingStatus = profile.filingStatus || 'single';
   const standardDeduction = getStandardDeduction(filingStatus);
   const fillTarget = assumptions.withdrawalBracketFillTarget ?? 0.12;
 
-  {
-    const ssTaxableStep2 = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
-    const incomeAfterRMDs = result.traditionalWithdrawal + ssTaxableStep2;
-    const roomInFillBracket = getWithdrawalToFillBracket(incomeAfterRMDs, fillTarget, filingStatus);
-
-    // Withdraw additional from traditional if we have room and need the money
-    const additionalTraditional = Math.min(roomInFillBracket, remainingNeed);
-    let additionalRemaining = additionalTraditional;
-
-    for (const acc of traditionalAccounts) {
-      if (additionalRemaining <= 0) break;
-      const withdrawal = Math.min(additionalRemaining, acc.balance);
-      acc.balance -= withdrawal;
-      result.byAccount[acc.id] += withdrawal;
-      result.traditionalWithdrawal += withdrawal;
-      result.total += withdrawal;
-      additionalRemaining -= withdrawal;
-      remainingNeed -= withdrawal;
-
-      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-        accountDepletionAges[acc.id] = age;
-      }
-    }
-  }
-
-  // Step 2.5: 0% LTCG Harvesting
-  // In years where ordinary income is below the 0% capital gains threshold,
-  // step up cost basis on taxable accounts by simulating a sell-and-rebuy.
-  // This eliminates future capital gains taxes at no current cost.
-  {
-    const ltcgBrackets = getCapitalGainsBrackets(filingStatus);
-    const ltcg0Ceiling = ltcgBrackets[0].max; // 96700 MFJ / 48350 single
-    const ssTaxableForHarvest = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
-    const ordinaryTaxableIncome = Math.max(0, result.traditionalWithdrawal + ssTaxableForHarvest - standardDeduction);
-    let harvestRoom = Math.max(0, ltcg0Ceiling - ordinaryTaxableIncome);
-
-    for (const acc of taxableAccounts) {
-      if (harvestRoom <= 0) break;
-      const unrealizedGains = Math.max(0, acc.balance - acc.costBasis);
-      if (unrealizedGains <= 0) continue;
-      const harvestAmount = Math.min(unrealizedGains, harvestRoom);
-      acc.costBasis += harvestAmount; // step up basis — 0% tax, $0 cash impact
-      harvestRoom -= harvestAmount;
-    }
-  }
-
-  // Step 3: RULE 4 - Use taxable brokerage for remaining needs
-  // Prefer capital gains (0-15%) over ordinary income at higher brackets
-  for (const acc of taxableAccounts) {
-    if (remainingNeed <= 0) break;
-    const withdrawal = Math.min(remainingNeed, acc.balance);
-
-    // Calculate gains portion (simplified: proportional to balance vs cost basis)
-    const gainRatio = acc.costBasis > 0 ? Math.max(0, 1 - acc.costBasis / acc.balance) : 0.5;
-    const gains = withdrawal * gainRatio;
-
-    acc.balance -= withdrawal;
-    // Reduce cost basis proportionally
-    if (acc.balance > 0) {
-      acc.costBasis *= (acc.balance / (acc.balance + withdrawal));
-    } else {
-      acc.costBasis = 0;
-    }
-
-    result.byAccount[acc.id] += withdrawal;
-    result.taxableWithdrawal += withdrawal;
-    result.taxableGains += gains;
-    result.total += withdrawal;
-    remainingNeed -= withdrawal;
-
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
-    }
-  }
-
-  // Step 4: RULE 2 + RULE 6 - Deplete traditional accounts beyond 12% bracket
-  // Better to control when we pay taxes than let future RMDs force us into higher brackets
-  if (remainingNeed > 0) {
-    for (const acc of traditionalAccounts) {
+  // For dynamic_low_magi strategy in high-MAGI years, prefer Roth/Taxable before filling traditional bracket
+  // to minimize SS torpedo effect and IRMAA exposure
+  if (useDynamicLowMagiReordering) {
+    // Step 2a (dynamic): Use Roth before filling traditional bracket
+    for (const acc of rothAccounts) {
       if (remainingNeed <= 0) break;
       const withdrawal = Math.min(remainingNeed, acc.balance);
       acc.balance -= withdrawal;
       result.byAccount[acc.id] += withdrawal;
-      result.traditionalWithdrawal += withdrawal;
+      result.rothWithdrawal += withdrawal;
       result.total += withdrawal;
       remainingNeed -= withdrawal;
 
@@ -752,37 +899,220 @@ function performTaxOptimizedWithdrawal(
         accountDepletionAges[acc.id] = age;
       }
     }
-  }
 
-  // Step 5: RULE 8 - Use Roth only as pressure-release valve
-  // Preserve tax-free growth; use only when other options exhausted
-  for (const acc of rothAccounts) {
-    if (remainingNeed <= 0) break;
-    const withdrawal = Math.min(remainingNeed, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.rothWithdrawal += withdrawal;
-    result.total += withdrawal;
-    remainingNeed -= withdrawal;
+    // Step 2b (dynamic): Use taxable accounts (gains portion has lower MAGI impact)
+    for (const acc of taxableAccounts) {
+      if (remainingNeed <= 0) break;
+      const withdrawal = Math.min(remainingNeed, acc.balance);
 
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
+      // Calculate gains portion (simplified: proportional to balance vs cost basis)
+      const gainRatio = acc.costBasis > 0 ? Math.max(0, 1 - acc.costBasis / acc.balance) : 0.5;
+      const gains = withdrawal * gainRatio;
+
+      acc.balance -= withdrawal;
+      // Reduce cost basis proportionally
+      if (acc.balance > 0) {
+        acc.costBasis *= (acc.balance / (acc.balance + withdrawal));
+      } else {
+        acc.costBasis = 0;
+      }
+
+      result.byAccount[acc.id] += withdrawal;
+      result.taxableWithdrawal += withdrawal;
+      result.taxableGains += gains;
+      result.total += withdrawal;
+      remainingNeed -= withdrawal;
+
+      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+        accountDepletionAges[acc.id] = age;
+      }
     }
-  }
 
-  // Step 6: RULE 9 - Use HSA last (triple tax-free, stealth Roth)
-  // Superior tax treatment; preserve as long as possible
-  for (const acc of hsaAccounts) {
-    if (remainingNeed <= 0) break;
-    const withdrawal = Math.min(remainingNeed, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.hsaWithdrawal += withdrawal;
-    result.total += withdrawal;
-    remainingNeed -= withdrawal;
+    // Step 2c (dynamic): Fill bracket with traditional (less aggressive now that Roth/Taxable used)
+    {
+      const ssTaxableStep2 = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
+      const incomeAfterRMDs = result.traditionalWithdrawal + ssTaxableStep2;
+      const roomInFillBracket = getWithdrawalToFillBracket(incomeAfterRMDs, fillTarget, filingStatus);
 
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
+      const additionalTraditional = Math.min(roomInFillBracket, remainingNeed);
+      let additionalRemaining = additionalTraditional;
+
+      for (const acc of traditionalAccounts) {
+        if (additionalRemaining <= 0) break;
+        const withdrawal = Math.min(additionalRemaining, acc.balance);
+        acc.balance -= withdrawal;
+        result.byAccount[acc.id] += withdrawal;
+        result.traditionalWithdrawal += withdrawal;
+        result.total += withdrawal;
+        additionalRemaining -= withdrawal;
+        remainingNeed -= withdrawal;
+
+        if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+          accountDepletionAges[acc.id] = age;
+        }
+      }
+    }
+
+    // Step 2d (dynamic): Deplete remaining traditional accounts beyond bracket
+    if (remainingNeed > 0) {
+      for (const acc of traditionalAccounts) {
+        if (remainingNeed <= 0) break;
+        const withdrawal = Math.min(remainingNeed, acc.balance);
+        acc.balance -= withdrawal;
+        result.byAccount[acc.id] += withdrawal;
+        result.traditionalWithdrawal += withdrawal;
+        result.total += withdrawal;
+        remainingNeed -= withdrawal;
+
+        if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+          accountDepletionAges[acc.id] = age;
+        }
+      }
+    }
+
+    // Step 2e (dynamic): Use HSA last (triple tax-free, stealth Roth)
+    for (const acc of hsaAccounts) {
+      if (remainingNeed <= 0) break;
+      const withdrawal = Math.min(remainingNeed, acc.balance);
+      acc.balance -= withdrawal;
+      result.byAccount[acc.id] += withdrawal;
+      result.hsaWithdrawal += withdrawal;
+      result.total += withdrawal;
+      remainingNeed -= withdrawal;
+
+      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+        accountDepletionAges[acc.id] = age;
+      }
+    }
+  } else {
+    // Standard order for non-dynamic or low-MAGI years
+    // Step 2: RULE 3 - Fill up to target bracket with additional traditional withdrawals.
+    // Always runs regardless of taxableFirstSpendingAge — filling the low bracket now (0-12%)
+    // prevents larger forced RMDs later at higher rates. Taxable accounts cover remaining
+    // spending above the bracket fill in Step 3.
+    {
+      const ssTaxableStep2 = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
+      const incomeAfterRMDs = result.traditionalWithdrawal + ssTaxableStep2;
+      const roomInFillBracket = getWithdrawalToFillBracket(incomeAfterRMDs, fillTarget, filingStatus);
+
+      // Withdraw additional from traditional if we have room and need the money
+      const additionalTraditional = Math.min(roomInFillBracket, remainingNeed);
+      let additionalRemaining = additionalTraditional;
+
+      for (const acc of traditionalAccounts) {
+        if (additionalRemaining <= 0) break;
+        const withdrawal = Math.min(additionalRemaining, acc.balance);
+        acc.balance -= withdrawal;
+        result.byAccount[acc.id] += withdrawal;
+        result.traditionalWithdrawal += withdrawal;
+        result.total += withdrawal;
+        additionalRemaining -= withdrawal;
+        remainingNeed -= withdrawal;
+
+        if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+          accountDepletionAges[acc.id] = age;
+        }
+      }
+    }
+
+    // Step 2.5: 0% LTCG Harvesting
+    // In years where ordinary income is below the 0% capital gains threshold,
+    // step up cost basis on taxable accounts by simulating a sell-and-rebuy.
+    // This eliminates future capital gains taxes at no current cost.
+    {
+      const ltcgBrackets = getCapitalGainsBrackets(filingStatus);
+      const ltcg0Ceiling = ltcgBrackets[0].max; // 96700 MFJ / 48350 single
+      const ssTaxableForHarvest = calculateSSTaxableAmount(socialSecurityIncome, result.traditionalWithdrawal, filingStatus);
+      const ordinaryTaxableIncome = Math.max(0, result.traditionalWithdrawal + ssTaxableForHarvest - standardDeduction);
+      let harvestRoom = Math.max(0, ltcg0Ceiling - ordinaryTaxableIncome);
+
+      for (const acc of taxableAccounts) {
+        if (harvestRoom <= 0) break;
+        const unrealizedGains = Math.max(0, acc.balance - acc.costBasis);
+        if (unrealizedGains <= 0) continue;
+        const harvestAmount = Math.min(unrealizedGains, harvestRoom);
+        acc.costBasis += harvestAmount; // step up basis — 0% tax, $0 cash impact
+        harvestRoom -= harvestAmount;
+      }
+    }
+
+    // Step 3: RULE 4 - Use taxable brokerage for remaining needs
+    // Prefer capital gains (0-15%) over ordinary income at higher brackets
+    for (const acc of taxableAccounts) {
+      if (remainingNeed <= 0) break;
+      const withdrawal = Math.min(remainingNeed, acc.balance);
+
+      // Calculate gains portion (simplified: proportional to balance vs cost basis)
+      const gainRatio = acc.costBasis > 0 ? Math.max(0, 1 - acc.costBasis / acc.balance) : 0.5;
+      const gains = withdrawal * gainRatio;
+
+      acc.balance -= withdrawal;
+      // Reduce cost basis proportionally
+      if (acc.balance > 0) {
+        acc.costBasis *= (acc.balance / (acc.balance + withdrawal));
+      } else {
+        acc.costBasis = 0;
+      }
+
+      result.byAccount[acc.id] += withdrawal;
+      result.taxableWithdrawal += withdrawal;
+      result.taxableGains += gains;
+      result.total += withdrawal;
+      remainingNeed -= withdrawal;
+
+      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+        accountDepletionAges[acc.id] = age;
+      }
+    }
+
+    // Step 4: RULE 2 + RULE 6 - Deplete traditional accounts beyond 12% bracket
+    // Better to control when we pay taxes than let future RMDs force us into higher brackets
+    if (remainingNeed > 0) {
+      for (const acc of traditionalAccounts) {
+        if (remainingNeed <= 0) break;
+        const withdrawal = Math.min(remainingNeed, acc.balance);
+        acc.balance -= withdrawal;
+        result.byAccount[acc.id] += withdrawal;
+        result.traditionalWithdrawal += withdrawal;
+        result.total += withdrawal;
+        remainingNeed -= withdrawal;
+
+        if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+          accountDepletionAges[acc.id] = age;
+        }
+      }
+    }
+
+    // Step 5: RULE 8 - Use Roth only as pressure-release valve
+    // Preserve tax-free growth; use only when other options exhausted
+    for (const acc of rothAccounts) {
+      if (remainingNeed <= 0) break;
+      const withdrawal = Math.min(remainingNeed, acc.balance);
+      acc.balance -= withdrawal;
+      result.byAccount[acc.id] += withdrawal;
+      result.rothWithdrawal += withdrawal;
+      result.total += withdrawal;
+      remainingNeed -= withdrawal;
+
+      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+        accountDepletionAges[acc.id] = age;
+      }
+    }
+
+    // Step 6: RULE 9 - Use HSA last (triple tax-free, stealth Roth)
+    // Superior tax treatment; preserve as long as possible
+    for (const acc of hsaAccounts) {
+      if (remainingNeed <= 0) break;
+      const withdrawal = Math.min(remainingNeed, acc.balance);
+      acc.balance -= withdrawal;
+      result.byAccount[acc.id] += withdrawal;
+      result.hsaWithdrawal += withdrawal;
+      result.total += withdrawal;
+      remainingNeed -= withdrawal;
+
+      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+        accountDepletionAges[acc.id] = age;
+      }
     }
   }
 

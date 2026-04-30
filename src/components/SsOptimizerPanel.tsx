@@ -10,6 +10,7 @@ interface SsOptimizerPanelProps {
   accumulationResult: AccumulationResult;
   onApplyPrimary: (startAge: number, monthlyBenefit: number) => void;
   onApplySpouse?: (startAge: number, monthlyBenefit: number) => void;
+  onBestOption?: (target: SsOptimizerTarget, startAge: number) => void;
   isMFJ: boolean;
   countryConfig?: CountryConfig;
 }
@@ -29,6 +30,7 @@ export function SsOptimizerPanel({
   accumulationResult,
   onApplyPrimary,
   onApplySpouse,
+  onBestOption,
   isMFJ,
   countryConfig,
 }: SsOptimizerPanelProps) {
@@ -56,6 +58,7 @@ export function SsOptimizerPanel({
       try {
         const r = runSsOptimizer(accounts, profile, assumptions, accumulationResult, countryConfig, target);
         setResult(r);
+        onBestOption?.(target, r.bestOption.startAge);
       } finally {
         setRunning(false);
       }

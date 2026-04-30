@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Profile, FilingStatus, SsBenefitOption } from '../types';
 import { NumberInput } from './NumberInput';
 import { Tooltip } from './Tooltip';
@@ -12,6 +13,49 @@ const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray
 
 export function ProfileForm({ profile, onChange }: ProfileFormProps) {
   const { country } = useCountry();
+  const optimalPrimaryStartAge = profile.optimalSocialSecurityStartAge;
+  const optimalSpouseStartAge = profile.optimalSpouseSocialSecurityStartAge;
+
+  const ssOptions: SsBenefitOption[] = profile.ssBenefitOptions ?? (
+    (profile.socialSecurityStartAge || profile.socialSecurityBenefit)
+      ? [{ startAge: profile.socialSecurityStartAge ?? (country === 'CA' ? 65 : 67), monthlyBenefit: profile.socialSecurityBenefit ?? 0 }]
+      : []
+  );
+
+  const spouseOptions: SsBenefitOption[] = profile.spouseSsBenefitOptions ?? (
+    (profile.spouseSocialSecurityStartAge || profile.spouseSocialSecurityBenefit)
+      ? [{ startAge: profile.spouseSocialSecurityStartAge ?? 67, monthlyBenefit: profile.spouseSocialSecurityBenefit ?? 0 }]
+      : []
+  );
+
+  useEffect(() => {
+    const nextProfile: Partial<Profile> = {};
+
+    if (profile.ssBenefitOptions === undefined && ssOptions.length > 0) {
+      nextProfile.ssBenefitOptions = ssOptions;
+    }
+
+    const isUsMarried = country === 'US' && profile.filingStatus === 'married_filing_jointly';
+
+    if (isUsMarried && profile.spouseCurrentAge === undefined) {
+      nextProfile.spouseCurrentAge = profile.currentAge;
+    }
+
+    if (isUsMarried && profile.spouseRetirementAge === undefined) {
+      nextProfile.spouseRetirementAge = profile.retirementAge;
+    }
+
+    if (isUsMarried && profile.spouseSsBenefitOptions === undefined && spouseOptions.length > 0) {
+      nextProfile.spouseSsBenefitOptions = spouseOptions;
+    }
+
+    if (Object.keys(nextProfile).length > 0) {
+      onChange({
+        ...profile,
+        ...nextProfile,
+      });
+    }
+  }, [country, onChange, profile, spouseOptions, ssOptions]);
 
   const handleChange = (field: keyof Profile, value: number | string) => {
     onChange({
@@ -23,7 +67,7 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
   // Sync ssBenefitOptions changes and keep the active socialSecurityStartAge/Benefit
   // in sync with the first row so the main simulation always has a valid scenario.
   const handleSsOptionChange = (index: number, field: keyof SsBenefitOption, value: number) => {
-    const updated = (profile.ssBenefitOptions ?? []).map((opt, i) =>
+    const updated = ssOptions.map((opt, i) =>
       i === index ? { ...opt, [field]: value } : opt
     );
     const first = updated[0];
@@ -32,6 +76,7 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       ssBenefitOptions: updated,
       socialSecurityStartAge: first?.startAge ?? profile.socialSecurityStartAge,
       socialSecurityBenefit: first?.monthlyBenefit ?? profile.socialSecurityBenefit,
+      optimalSocialSecurityStartAge: undefined,
     });
   };
 
@@ -47,29 +92,24 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       ssBenefitOptions: updated,
       socialSecurityStartAge: updated[0].startAge,
       socialSecurityBenefit: updated[0].monthlyBenefit,
+      optimalSocialSecurityStartAge: undefined,
     });
   };
 
   const handleSsOptionRemove = (index: number) => {
-    const updated = (profile.ssBenefitOptions ?? []).filter((_, i) => i !== index);
+    const updated = ssOptions.filter((_, i) => i !== index);
     onChange({
       ...profile,
       ssBenefitOptions: updated,
       socialSecurityStartAge: updated[0]?.startAge ?? profile.socialSecurityStartAge,
       socialSecurityBenefit: updated[0]?.monthlyBenefit ?? profile.socialSecurityBenefit,
+      optimalSocialSecurityStartAge: undefined,
     });
   };
 
-  // Initialize ssBenefitOptions from existing single-field values on first render
-  const ssOptions: SsBenefitOption[] = profile.ssBenefitOptions ?? (
-    (profile.socialSecurityStartAge || profile.socialSecurityBenefit)
-      ? [{ startAge: profile.socialSecurityStartAge ?? (country === 'CA' ? 65 : 67), monthlyBenefit: profile.socialSecurityBenefit ?? 0 }]
-      : []
-  );
-
   // Spouse SS handlers — mirror primary handlers but write to spouse fields
   const handleSpouseSsOptionChange = (index: number, field: keyof SsBenefitOption, value: number) => {
-    const updated = (profile.spouseSsBenefitOptions ?? []).map((opt, i) =>
+    const updated = spouseOptions.map((opt, i) =>
       i === index ? { ...opt, [field]: value } : opt
     );
     const first = updated[0];
@@ -78,6 +118,7 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       spouseSsBenefitOptions: updated,
       spouseSocialSecurityStartAge: first?.startAge ?? profile.spouseSocialSecurityStartAge,
       spouseSocialSecurityBenefit: first?.monthlyBenefit ?? profile.spouseSocialSecurityBenefit,
+      optimalSpouseSocialSecurityStartAge: undefined,
     });
   };
 
@@ -90,24 +131,20 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
       spouseSsBenefitOptions: updated,
       spouseSocialSecurityStartAge: updated[0].startAge,
       spouseSocialSecurityBenefit: updated[0].monthlyBenefit,
+      optimalSpouseSocialSecurityStartAge: undefined,
     });
   };
 
   const handleSpouseSsOptionRemove = (index: number) => {
-    const updated = (profile.spouseSsBenefitOptions ?? []).filter((_, i) => i !== index);
+    const updated = spouseOptions.filter((_, i) => i !== index);
     onChange({
       ...profile,
       spouseSsBenefitOptions: updated,
       spouseSocialSecurityStartAge: updated[0]?.startAge ?? profile.spouseSocialSecurityStartAge,
       spouseSocialSecurityBenefit: updated[0]?.monthlyBenefit ?? profile.spouseSocialSecurityBenefit,
+      optimalSpouseSocialSecurityStartAge: undefined,
     });
   };
-
-  const spouseOptions: SsBenefitOption[] = profile.spouseSsBenefitOptions ?? (
-    (profile.spouseSocialSecurityStartAge || profile.spouseSocialSecurityBenefit)
-      ? [{ startAge: profile.spouseSocialSecurityStartAge ?? 67, monthlyBenefit: profile.spouseSocialSecurityBenefit ?? 0 }]
-      : []
-  );
 
   return (
     <div className="space-y-4">
@@ -267,7 +304,14 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
           </div>
         )}
         {ssOptions.map((opt, i) => (
-          <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+          <div
+            key={i}
+            className={`grid grid-cols-[1fr_1fr_auto] gap-2 items-center rounded-lg px-2 py-2 transition-colors ${
+              opt.startAge === optimalPrimaryStartAge
+                ? 'bg-amber-50 ring-1 ring-amber-300 dark:bg-amber-500/10 dark:ring-amber-400/50'
+                : ''
+            }`}
+          >
             <NumberInput
               value={opt.startAge}
               onChange={(val) => handleSsOptionChange(i, 'startAge', val)}
@@ -294,6 +338,11 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
             </button>
           </div>
         ))}
+        {optimalPrimaryStartAge !== undefined && (
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+            Highlighted row is the optimizer-recommended start age: {optimalPrimaryStartAge}.
+          </p>
+        )}
         {ssOptions.length < 3 && (
           <button
             type="button"
@@ -327,7 +376,14 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
               </div>
             )}
             {spouseOptions.map((opt, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+              <div
+                key={i}
+                className={`grid grid-cols-[1fr_1fr_auto] gap-2 items-center rounded-lg px-2 py-2 transition-colors ${
+                  opt.startAge === optimalSpouseStartAge
+                    ? 'bg-amber-50 ring-1 ring-amber-300 dark:bg-amber-500/10 dark:ring-amber-400/50'
+                    : ''
+                }`}
+              >
                 <NumberInput
                   value={opt.startAge}
                   onChange={(val) => handleSpouseSsOptionChange(i, 'startAge', val)}
@@ -354,6 +410,11 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
                 </button>
               </div>
             ))}
+            {optimalSpouseStartAge !== undefined && (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Highlighted row is the optimizer-recommended spouse start age: {optimalSpouseStartAge}.
+              </p>
+            )}
             {spouseOptions.length < 3 && (
               <button
                 type="button"

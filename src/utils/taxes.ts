@@ -218,6 +218,31 @@ export function calculateSSTaxableAmount(
 }
 
 /**
+ * Estimate the effective ordinary-income multiplier caused by SS taxation.
+ *
+ * A $1 increase in ordinary income can increase taxable SS by:
+ *   - $0.00 below provisional threshold T1  => multiplier 1.00
+ *   - $0.50 between T1 and T2              => multiplier 1.50
+ *   - $0.85 above T2                       => multiplier 1.85
+ */
+export function getSSOrdinaryIncomeMultiplier(
+  ssIncome: number,
+  otherOrdinaryIncome: number,
+  filingStatus: FilingStatus
+): number {
+  if (ssIncome <= 0) return 1;
+
+  const [t1, t2] = filingStatus === 'married_filing_jointly'
+    ? [32000, 44000]
+    : [25000, 34000];
+
+  const provisionalIncome = otherOrdinaryIncome + ssIncome * 0.5;
+  if (provisionalIncome < t1) return 1;
+  if (provisionalIncome < t2) return 1.5;
+  return 1.85;
+}
+
+/**
  * Effective tax rate
  */
 export function getEffectiveTaxRate(
@@ -248,7 +273,10 @@ export function getRoomToNextIRMAAThreshold(
   const thresholds = getIRMAAThresholds(filingStatus);
   
   // SSA uses "greater than" the threshold, so use > min and <= max
-  const currentThreshold = thresholds.find(t => currentMAGI > t.min && currentMAGI <= t.max);
+  const currentThreshold = thresholds.find((t, index) => {
+    const lowerBoundSatisfied = index === 0 ? currentMAGI >= t.min : currentMAGI > t.min;
+    return lowerBoundSatisfied && currentMAGI <= t.max;
+  });
   if (!currentThreshold) {
     // Already at max threshold
     return 0;
@@ -267,7 +295,10 @@ export function getAnnualIRMAASurcharge(
 ): number {
   const thresholds = getIRMAAThresholds(filingStatus);
   // SSA uses "greater than" the threshold, so use > min and <= max
-  const threshold = thresholds.find(t => magi > t.min && magi <= t.max);
+  const threshold = thresholds.find((t, index) => {
+    const lowerBoundSatisfied = index === 0 ? magi >= t.min : magi > t.min;
+    return lowerBoundSatisfied && magi <= t.max;
+  });
   const surchargePerPerson = threshold
     ? (threshold.partBSurcharge + threshold.partDSurcharge) * 12
     : (thresholds[thresholds.length - 1].partBSurcharge + thresholds[thresholds.length - 1].partDSurcharge) * 12;
@@ -290,7 +321,10 @@ export function getIRMAAProximity(
   
   const thresholds = getIRMAAThresholds(filingStatus);
   // SSA uses "greater than" the threshold, so use > min and <= max
-  const currentThreshold = thresholds.find(t => currentMAGI > t.min && currentMAGI <= t.max);
+  const currentThreshold = thresholds.find((t, index) => {
+    const lowerBoundSatisfied = index === 0 ? currentMAGI >= t.min : currentMAGI > t.min;
+    return lowerBoundSatisfied && currentMAGI <= t.max;
+  });
   
   if (!currentThreshold) {
     return { distanceToNext: 0, nextSurchargeAnnual: 0 };

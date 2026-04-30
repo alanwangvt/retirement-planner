@@ -69,35 +69,35 @@ function testTaxCalculations(): void {
   assertApprox(tax1, 0, 0.01, 'Zero taxable income = $0 tax');
 
   // Test 2: Income in 10% bracket only
-  // 10% bracket: $0 - $23,200
+  // 10% bracket: $0 - $23,850
   // Tax on $20,000 = $20,000 * 0.10 = $2,000
   const tax2 = calculateFederalIncomeTax(20000, 'married_filing_jointly');
   assertApprox(tax2, 2000, 0.01, '$20k taxable income = $2,000 tax (10% bracket)');
 
   // Test 3: Income spanning 10% and 12% brackets
-  // 10% on first $23,200 = $2,320
-  // 12% on next $26,800 = $3,216
-  // Total = $5,536
+  // 10% on first $23,850 = $2,385
+  // 12% on next $26,150 = $3,138
+  // Total = $5,523
   const tax3 = calculateFederalIncomeTax(50000, 'married_filing_jointly');
-  assertApprox(tax3, 5536, 0.01, '$50k taxable income = $5,536 tax (10% + 12% brackets)');
+  assertApprox(tax3, 5523, 0.01, '$50k taxable income = $5,523 tax (10% + 12% brackets)');
 
   // Test 4: Income in 22% bracket
-  // 10% on $23,200 = $2,320
-  // 12% on $71,100 ($94,300 - $23,200) = $8,532
-  // 22% on $5,700 ($100,000 - $94,300) = $1,254
-  // Total = $12,106
+  // 10% on $23,850 = $2,385
+  // 12% on $73,100 ($96,950 - $23,850) = $8,772
+  // 22% on $3,050 ($100,000 - $96,950) = $671
+  // Total = $11,828
   const tax4 = calculateFederalIncomeTax(100000, 'married_filing_jointly');
-  assertApprox(tax4, 12106, 0.01, '$100k taxable income = $12,106 tax');
+  assertApprox(tax4, 11828, 0.01, '$100k taxable income = $11,828 tax');
 
   console.log('\n--- Federal Income Tax (Single) ---');
 
-  // Single 10% bracket: $0 - $11,600
-  // Single 12% bracket: $11,600 - $47,150
+  // Single 10% bracket: $0 - $11,925
+  // Single 12% bracket: $11,925 - $48,475
   const tax5 = calculateFederalIncomeTax(30000, 'single');
-  // 10% on $11,600 = $1,160
-  // 12% on $18,400 = $2,208
-  // Total = $3,368
-  assertApprox(tax5, 3368, 0.01, '$30k taxable income (single) = $3,368 tax');
+  // 10% on $11,925 = $1,192.50
+  // 12% on $18,075 = $2,169.00
+  // Total = $3,361.50
+  assertApprox(tax5, 3361.5, 0.01, '$30k taxable income (single) = $3,361.50 tax');
 
   console.log('\n--- Standard Deduction ---');
 
@@ -108,7 +108,6 @@ function testTaxCalculations(): void {
   assertApprox(stdSingle, 15750, 0.01, 'Single standard deduction = $15,750');
 
   console.log('\n--- State Tax ---');
-
   const stateTax1 = calculateStateTax(50000, 0.05);
   assertApprox(stateTax1, 2500, 0.01, '$50k at 5% state tax = $2,500');
 
@@ -117,16 +116,16 @@ function testTaxCalculations(): void {
 
   console.log('\n--- Capital Gains Tax (MFJ) ---');
 
-  // 0% up to $94,050
-  // 15% from $94,050 to $583,750
+  // 0% up to $96,700
+  // 15% from $96,700 to $600,050
   const cgTax1 = calculateCapitalGainsTax(50000, 0, 'married_filing_jointly');
   assertApprox(cgTax1, 0, 0.01, '$50k capital gains with $0 other income = $0 (0% bracket)');
 
   const cgTax2 = calculateCapitalGainsTax(50000, 100000, 'married_filing_jointly');
-  // With $100k ordinary income, taxable = $70,800 after standard deduction
-  // Room in 0% bracket ($94,050): $23,250 of gains at 0%
-  // Remaining $26,750 at 15% = $4,012.50
-  assertApprox(cgTax2, 4012.50, 0.01, '$50k cap gains with $100k income (partial 0% bracket)');
+  // With $100k ordinary income, taxable = $68,500 after standard deduction
+  // Room in 0% bracket ($96,700): $28,200 of gains at 0%
+  // Remaining $21,800 at 15% = $3,270.00
+  assertApprox(cgTax2, 3270, 0.01, '$50k cap gains with $100k income (partial 0% bracket)');
 }
 
 // =============================================================================
@@ -168,7 +167,7 @@ function testAccumulationPhase(): void {
   const account1: Account = {
     id: 'test1',
     name: 'Test 401k',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 100000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -238,7 +237,7 @@ function testAccumulationPhase(): void {
   const account4: Account = {
     id: 'test4',
     name: 'Test',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 0, // Start with $0
     annualContribution: 10000,
     contributionGrowthRate: 0.03, // 3% growth
@@ -263,7 +262,7 @@ function testAccumulationPhase(): void {
     {
       id: 'trad',
       name: 'Traditional',
-      type: 'traditional_401k',
+      type: 'traditional_401k_403b',
       balance: 100000,
       annualContribution: 0,
       contributionGrowthRate: 0,
@@ -299,7 +298,7 @@ function testWithdrawalPhase(): void {
   const account: Account = {
     id: 'test',
     name: 'Traditional 401k',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 1000000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -334,7 +333,7 @@ function testWithdrawalPhase(): void {
     {
       id: 'trad',
       name: 'Traditional',
-      type: 'traditional_401k',
+      type: 'traditional_401k_403b',
       balance: 500000,
       annualContribution: 0,
       contributionGrowthRate: 0,
@@ -406,11 +405,11 @@ function testWithdrawalPhase(): void {
       `Withdrawal decreases when SS starts ($${age67.totalWithdrawal.toFixed(0)} < $${age65.totalWithdrawal.toFixed(0)})`
     );
 
-    // But gross income should be similar (tracking target spending)
-    const incomeDiff = Math.abs(age67.grossIncome - age65.grossIncome);
+    // Spendable income should stay near the target even though gross income drops.
+    const incomeDiff = Math.abs(age67.afterTaxIncome - age65.afterTaxIncome);
     assert(
       incomeDiff < 1000,
-      `Gross income stays roughly constant ($${age65.grossIncome.toFixed(0)} vs $${age67.grossIncome.toFixed(0)})`
+      `Spendable income stays roughly constant ($${age65.afterTaxIncome.toFixed(0)} vs $${age67.afterTaxIncome.toFixed(0)})`
     );
   }
 
@@ -490,8 +489,8 @@ function testIncomeContinuity(): void {
   const account: Account = {
     id: 'test',
     name: 'Traditional 401k',
-    type: 'traditional_401k',
-    balance: 2000000, // $2M portfolio
+    type: 'traditional_401k_403b',
+    balance: 2000000,
     annualContribution: 0,
     contributionGrowthRate: 0,
     returnRate: 0,
@@ -513,7 +512,6 @@ function testIncomeContinuity(): void {
     retirementReturnRate: 0.05,
   };
 
-  // Use $2M as if it's the retirement balance directly
   const mockAccumulation = {
     yearlyBalances: [],
     finalBalances: { test: 2000000 },
@@ -539,20 +537,15 @@ function testIncomeContinuity(): void {
         `$${(year.totalWithdrawal / 1000).toFixed(1)}k`.padStart(10),
         `$${(year.grossIncome / 1000).toFixed(1)}k`.padStart(8),
         `$${(year.totalTax / 1000).toFixed(1)}k`.padStart(8),
-        `$${(year.afterTaxIncome / 1000).toFixed(1)}k`.padStart(9),
+        `$${(year.afterTaxIncome / 1000).toFixed(1)}k`.padStart(8),
       ].join(' | ');
       console.log(`  ${row}`);
 
-      // Check for anomalies - after-tax income should grow roughly with inflation
       if (previousAfterTax > 0) {
-        const expectedGrowth = previousAfterTax * 1.03; // 3% inflation
-        const actualGrowth = year.afterTaxIncome;
-        const deviation = Math.abs(actualGrowth - expectedGrowth) / expectedGrowth;
-
-        // If after-tax income drops more than 5% from expected, flag it
-        if (deviation > 0.10 && actualGrowth < expectedGrowth) {
-          console.log(`  ⚠️  ANOMALY: After-tax income at age ${year.age} dropped unexpectedly!`);
+        const drop = (previousAfterTax - year.afterTaxIncome) / previousAfterTax;
+        if (drop > 0.1) {
           anomalyDetected = true;
+          console.log(`  ⚠️  ANOMALY: After-tax income at age ${year.age} dropped unexpectedly!`);
         }
       }
 
@@ -560,14 +553,10 @@ function testIncomeContinuity(): void {
     }
   }
 
-  console.log('');
-
-  // The specific issue: SS is inflated from current age (35), but target spending
-  // is based on retirement portfolio. Let's trace the calculation:
   console.log('\n--- Social Security Inflation Analysis ---');
 
-  const ssAt67YearsFromNow = 67 - 35; // 32 years
-  const ssAt67Inflated = 30000 * Math.pow(1.03, ssAt67YearsFromNow);
+  const ssAt67YearsFromNow = 67 - profile.currentAge;
+  const ssAt67Inflated = (profile.socialSecurityBenefit || 0) * 12 * Math.pow(1.03, ssAt67YearsFromNow);
   console.log(`  SS at 67 (years from now: ${ssAt67YearsFromNow}): $${ssAt67Inflated.toFixed(0)}`);
 
   const targetAt65 = 2000000 * 0.04;
@@ -576,13 +565,9 @@ function testIncomeContinuity(): void {
   console.log(`  Target spending at 67: $${targetAt67.toFixed(0)}`);
   console.log(`  Difference (what needs to be withdrawn): $${(targetAt67 - ssAt67Inflated).toFixed(0)}`);
 
-  if (ssAt67Inflated > targetAt67) {
-    console.log('\n  ⚠️  BUG FOUND: Social Security exceeds target spending!');
-    console.log('  This happens because SS is inflated from current age (35),');
-    console.log('  but target spending is based on portfolio at retirement.');
-  }
-
-  if (!anomalyDetected) {
+  if (anomalyDetected) {
+    console.log('\n  ⚠️  Income anomalies detected in ages 65-75');
+  } else {
     console.log('  ✓ No major income anomalies detected in ages 65-75');
   }
 }
@@ -599,7 +584,7 @@ function testEdgeCases(): void {
   const emptyAccount: Account = {
     id: 'empty',
     name: 'Empty',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 0,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -628,7 +613,7 @@ function testEdgeCases(): void {
   const account: Account = {
     id: 'test',
     name: 'Test',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 1000000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -671,7 +656,7 @@ function testEdgeCases(): void {
   console.log('\n--- Multiple Account Types ---');
 
   const mixedAccounts: Account[] = [
-    { id: '1', name: 'Trad 401k', type: 'traditional_401k', balance: 100000, annualContribution: 0, contributionGrowthRate: 0, returnRate: 0 },
+    { id: '1', name: 'Trad 401k', type: 'traditional_401k_403b', balance: 100000, annualContribution: 0, contributionGrowthRate: 0, returnRate: 0 },
     { id: '2', name: 'Roth 401k', type: 'roth_401k', balance: 100000, annualContribution: 0, contributionGrowthRate: 0, returnRate: 0 },
     { id: '3', name: 'Trad IRA', type: 'traditional_ira', balance: 100000, annualContribution: 0, contributionGrowthRate: 0, returnRate: 0 },
     { id: '4', name: 'Roth IRA', type: 'roth_ira', balance: 100000, annualContribution: 0, contributionGrowthRate: 0, returnRate: 0 },
@@ -697,46 +682,46 @@ function testCapitalGainsEdgeCases(): void {
 
   console.log('\n--- Capital gains with income below 0% bracket ---');
 
-  // MFJ: 0% rate up to $94,050
-  // With standard deduction of $29,200, ordinary income of $29,200 means $0 taxable
+  // MFJ: 0% rate up to $96,700
+  // With standard deduction of $31,500, ordinary income of $29,200 means $0 taxable
   // All $50k of gains should be at 0%
   const cgTax1 = calculateCapitalGainsTax(50000, 29200, 'married_filing_jointly');
   assertApprox(cgTax1, 0, 0.01, '$50k gains with income = std deduction should be 0%');
 
-  // Income at $50,000 means taxable = $20,800
-  // Room in 0% bracket = $94,050 - $20,800 = $73,250
+  // Income at $50,000 means taxable = $18,500
+  // Room in 0% bracket = $96,700 - $18,500 = $78,200
   // $50k gains all at 0%
   const cgTax2 = calculateCapitalGainsTax(50000, 50000, 'married_filing_jointly');
   assertApprox(cgTax2, 0, 0.01, '$50k gains with $50k income (all gains in 0% bracket)');
 
   console.log('\n--- Capital gains spanning multiple brackets ---');
 
-  // Income of $120,000 (taxable = $90,800)
-  // Room in 0% bracket = $94,050 - $90,800 = $3,250
-  // $100k gains: $3,250 at 0%, $96,750 at 15%
-  // Expected: $96,750 * 0.15 = $14,512.50
+  // Income of $120,000 (taxable = $88,500)
+  // Room in 0% bracket = $96,700 - $88,500 = $8,200
+  // $100k gains: $8,200 at 0%, $91,800 at 15%
+  // Expected: $91,800 * 0.15 = $13,770.00
   const cgTax3 = calculateCapitalGainsTax(100000, 120000, 'married_filing_jointly');
-  assertApprox(cgTax3, 14512.50, 0.01, '$100k gains with $120k income (spanning 0%/15%)');
+  assertApprox(cgTax3, 13770, 0.01, '$100k gains with $120k income (spanning 0%/15%)');
 
   console.log('\n--- Capital gains at high income (20% bracket) ---');
 
-  // Income of $600,000 (taxable = $570,800)
-  // This is in the 15% bracket ($94,050 to $583,750)
-  // Room in 15% = $583,750 - $570,800 = $12,950
-  // $50k gains: $12,950 at 15%, $37,050 at 20%
-  // Expected: $12,950 * 0.15 + $37,050 * 0.20 = $1,942.50 + $7,410 = $9,352.50
+  // Income of $600,000 (taxable = $568,500)
+  // This is in the 15% bracket ($96,700 to $600,050)
+  // Room in 15% = $600,050 - $568,500 = $31,550
+  // $50k gains: $31,550 at 15%, $18,450 at 20%
+  // Expected: $31,550 * 0.15 + $18,450 * 0.20 = $8,422.50
   const cgTax4 = calculateCapitalGainsTax(50000, 600000, 'married_filing_jointly');
-  assertApprox(cgTax4, 9352.50, 0.01, '$50k gains with $600k income (spanning 15%/20%)');
+  assertApprox(cgTax4, 8422.50, 0.01, '$50k gains with $600k income (spanning 15%/20%)');
 
   console.log('\n--- Single filer capital gains ---');
 
-  // Single: 0% up to $47,025, 15% to $518,900, 20% above
-  // Income $50k, taxable = $35,400
-  // Room in 0% = $47,025 - $35,400 = $11,625
-  // $30k gains: $11,625 at 0%, $18,375 at 15%
-  // Expected: $18,375 * 0.15 = $2,756.25
+  // Single: 0% up to $48,350, 15% to $533,400, 20% above
+  // Income $50k, taxable = $34,250
+  // Room in 0% = $48,350 - $34,250 = $14,100
+  // $30k gains: $14,100 at 0%, $15,900 at 15%
+  // Expected: $15,900 * 0.15 = $2,385.00
   const cgTax5 = calculateCapitalGainsTax(30000, 50000, 'single');
-  assertApprox(cgTax5, 2756.25, 0.01, '$30k gains with $50k income (single filer)');
+  assertApprox(cgTax5, 2385, 0.01, '$30k gains with $50k income (single filer)');
 
   console.log('\n--- Zero capital gains ---');
 
@@ -745,10 +730,10 @@ function testCapitalGainsEdgeCases(): void {
 
   console.log('\n--- Edge case: income exactly at bracket boundary ---');
 
-  // Income exactly at $94,050 + $29,200 = $123,250 (right at 0% cap gains max)
-  // Any gains would be at 15%
+  // With $123,250 ordinary income, taxable ordinary = $91,750.
+  // That leaves $4,950 in the 0% gains bracket; the remaining $5,050 is taxed at 15%.
   const cgTax7 = calculateCapitalGainsTax(10000, 123250, 'married_filing_jointly');
-  assertApprox(cgTax7, 1500, 0.01, '$10k gains at exactly 0% bracket cap = $1,500 (15%)');
+  assertApprox(cgTax7, 757.5, 0.01, '$10k gains at current bracket boundary = $757.50');
 }
 
 // =============================================================================
@@ -765,7 +750,7 @@ function testWithdrawalStrategyDetails(): void {
   const account: Account = {
     id: 'trad',
     name: 'Traditional',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 500000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -792,12 +777,15 @@ function testWithdrawalStrategyDetails(): void {
   const year1 = result.yearlyWithdrawals[0];
 
   // Target spending is $20k (4% of $500k)
-  // But the strategy should fill the 12% bracket
-  // Standard deduction: $29,200
-  // 12% bracket max: $94,300
-  // Total optimal: $29,200 + $94,300 = $123,500
-  // Since we only need $20k, withdrawal should be $20k (need-based, not bracket-filling beyond need)
-  assertApprox(year1.totalWithdrawal, 20000, 1, 'Withdrawal matches target spending');
+  // The solver should gross up withdrawals enough to cover taxes too.
+  assert(
+    year1.afterTaxIncome >= year1.targetSpending - 1,
+    'Spendable income meets target spending after taxes'
+  );
+  assert(
+    year1.totalWithdrawal >= 20000,
+    'Gross withdrawal can exceed target spending to cover taxes'
+  );
 
   console.log('\n--- Roth before taxable test ---');
 
@@ -806,7 +794,7 @@ function testWithdrawalStrategyDetails(): void {
     {
       id: 'trad',
       name: 'Traditional',
-      type: 'traditional_401k',
+      type: 'traditional_401k_403b',
       balance: 50000, // Small traditional
       annualContribution: 0,
       contributionGrowthRate: 0,
@@ -990,7 +978,7 @@ function testRMDInteractions(): void {
   const largeTraditional: Account = {
     id: 'trad',
     name: 'Traditional',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 2000000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -1032,7 +1020,7 @@ function testRMDInteractions(): void {
     {
       id: 'trad',
       name: 'Traditional',
-      type: 'traditional_401k',
+      type: 'traditional_401k_403b',
       balance: 1000000,
       annualContribution: 0,
       contributionGrowthRate: 0,
@@ -1069,7 +1057,7 @@ function testInflationConsistency(): void {
   const account: Account = {
     id: 'trad',
     name: 'Traditional',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 1000000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -1119,14 +1107,14 @@ function testInflationConsistency(): void {
   const ssAccum = calculateAccumulation([account], ssProfile, usConfig);
   const ssResult = calculateWithdrawals([account], ssProfile, assumptions, ssAccum, usConfig);
 
-  // SS starts at age 67
-  // Years from current age (60) to 67 = 7 years
-  // $30,000/year from a $2,500 monthly benefit, inflated by 3% for 7 years
+  // SS starts at age 67.
+  // The configured monthly benefit is interpreted as the amount at the start age,
+  // then inflated only in years after benefits begin.
   const age67 = ssResult.yearlyWithdrawals.find(y => y.age === 67);
 
   if (age67) {
-    const expectedSS = 2500 * 12 * Math.pow(1.03, 7);
-    assertApprox(age67.socialSecurityIncome, expectedSS, 1, 'SS inflated from current age to start age');
+    const expectedSS = 2500 * 12;
+    assertApprox(age67.socialSecurityIncome, expectedSS, 1, 'SS equals the configured start-age benefit at age 67');
   }
 }
 
@@ -1142,7 +1130,7 @@ function testPortfolioDepletion(): void {
   const smallAccount: Account = {
     id: 'small',
     name: 'Small Account',
-    type: 'traditional_401k',
+    type: 'traditional_401k_403b',
     balance: 50000,
     annualContribution: 0,
     contributionGrowthRate: 0,
@@ -1206,46 +1194,46 @@ function testTotalFederalTaxIntegration(): void {
 
   console.log('\n--- Combined ordinary income and capital gains ---');
 
-  // MFJ: std deduction $29,200
-  // $50k ordinary income -> taxable = $20,800 -> tax = $2,080 (10% bracket)
+  // MFJ: std deduction $31,500
+  // $50k ordinary income -> taxable = $18,500 -> tax = $1,850 (10% bracket)
   // Capital gains: $50k stacks on top
-  // Income base = $20,800, gains start here
-  // 0% bracket goes to $94,050, so $73,250 at 0%
+  // Income base = $18,500, gains start here
+  // 0% bracket goes to $96,700, so $78,200 at 0%
   // All $50k gains at 0%
-  // Total = $2,080 + $0 = $2,080
+  // Total = $1,850 + $0 = $1,850
   const tax1 = calculateTotalFederalTax(50000, 50000, 'married_filing_jointly');
-  assertApprox(tax1, 2080, 0.01, 'Ordinary $50k + Cap gains $50k (gains in 0% bracket)');
+  assertApprox(tax1, 1850, 0.01, 'Ordinary $50k + Cap gains $50k (gains in 0% bracket)');
 
   console.log('\n--- High income scenario ---');
 
-  // $200k ordinary income -> taxable = $170,800
-  // Tax: $23,200 @ 10% = $2,320
-  //      $71,100 @ 12% = $8,532
-  //      $76,500 @ 22% = $16,830
-  // Total ordinary tax = $27,682
-  // Capital gains $100k starts at $170,800
-  // 0% bracket ends at $94,050 (already passed)
+  // $200k ordinary income -> taxable = $168,500
+  // Tax: $23,850 @ 10% = $2,385
+  //      $73,100 @ 12% = $8,772
+  //      $71,550 @ 22% = $15,741
+  // Total ordinary tax = $26,898
+  // Capital gains $100k starts at $168,500
+  // 0% bracket ends at $96,700 (already passed)
   // All $100k at 15% = $15,000
-  // Total = $27,682 + $15,000 = $42,682
+  // Total = $26,898 + $15,000 = $41,898
   const tax2 = calculateTotalFederalTax(200000, 100000, 'married_filing_jointly');
-  assertApprox(tax2, 42682, 1, 'Ordinary $200k + Cap gains $100k');
+  assertApprox(tax2, 41898, 1, 'Ordinary $200k + Cap gains $100k');
 
   console.log('\n--- Only capital gains (no ordinary income) ---');
 
   // $0 ordinary income, $100k capital gains
   // Taxable ordinary = $0
   // Gains start at $0
-  // 0% bracket: $94,050 at 0%
-  // 15% bracket: $5,950 at 15% = $892.50
+  // 0% bracket: $96,700 at 0%
+  // 15% bracket: $3,300 at 15% = $495.00
   const tax3 = calculateTotalFederalTax(0, 100000, 'married_filing_jointly');
-  assertApprox(tax3, 892.50, 0.01, 'Only $100k capital gains, no ordinary income');
+  assertApprox(tax3, 495, 0.01, 'Only $100k capital gains, no ordinary income');
 
   console.log('\n--- Standard deduction covers all ordinary ---');
 
-  // $29,200 ordinary (exactly std deduction), $50k gains
+  // $31,500 ordinary (exactly std deduction), $50k gains
   // Taxable ordinary = $0
-  // All gains at 0% (under $94,050 threshold)
-  const tax4 = calculateTotalFederalTax(29200, 50000, 'married_filing_jointly');
+  // All gains at 0% (under $96,700 threshold)
+  const tax4 = calculateTotalFederalTax(31500, 50000, 'married_filing_jointly');
   assertApprox(tax4, 0, 0.01, 'Ordinary = std deduction, gains in 0% bracket');
 }
 
@@ -1330,6 +1318,121 @@ function testCanadianCalculations(): void {
 }
 
 // =============================================================================
+// DYNAMIC LOW-MAGI WITHDRAWAL REORDERING TESTS
+// =============================================================================
+
+function testDynamicLowMagiReordering(): void {
+  section('DYNAMIC LOW-MAGI WITHDRAWAL REORDERING');
+
+  console.log('\n--- Scenario: Age 73 with RMD and multiple account types ---');
+
+  // Create accounts for someone already at retirement age 73
+  const accounts: Account[] = [
+    {
+      id: 'trad401k',
+      name: 'Traditional 401k',
+      type: 'traditional_401k_403b',
+      balance: 500000,
+      annualContribution: 0,
+      contributionGrowthRate: 0,
+      returnRate: 0.05,
+    },
+    {
+      id: 'roth_ira',
+      name: 'Roth IRA',
+      type: 'roth_ira',
+      balance: 200000,
+      annualContribution: 0,
+      contributionGrowthRate: 0,
+      returnRate: 0.05,
+    },
+    {
+      id: 'taxable',
+      name: 'Taxable Brokerage',
+      type: 'taxable',
+      balance: 100000,
+      annualContribution: 0,
+      contributionGrowthRate: 0,
+      returnRate: 0.05,
+      costBasis: 50000,
+    },
+  ];
+
+  const profile: Profile = {
+    country: 'US',
+    currentAge: 73,
+    retirementAge: 73, // Already retired
+    lifeExpectancy: 95,
+    region: 'CA',
+    filingStatus: 'married_filing_jointly',
+    stateTaxRate: 0.05,
+  };
+
+  const assumptions: Assumptions = {
+    inflationRate: 0.03,
+    safeWithdrawalRate: 0.04,
+    retirementReturnRate: 0.05,
+    withdrawalBracketFillTarget: 0.12,
+    rothConversionStrategy: 'dynamic_low_magi',
+  };
+
+  // First calculate accumulation (should be just the current balances since we're at retirement age)
+  const accumulation = calculateAccumulation(accounts, profile, usConfig);
+
+  // Get withdrawals with dynamic_low_magi strategy
+  const resultDynamic = calculateWithdrawals(accounts, profile, assumptions, accumulation, usConfig);
+
+  // Get withdrawals with auto strategy for comparison
+  const assumptionsAuto: Assumptions = {
+    ...assumptions,
+    rothConversionStrategy: 'auto',
+  };
+
+  const resultAuto = calculateWithdrawals(accounts, profile, assumptionsAuto, accumulation, usConfig);
+
+  console.log('\n--- Comparing dynamic_low_magi vs auto strategy at age 73 (RMD required) ---');
+
+  assert(resultDynamic.yearlyWithdrawals.length > 0, 'Dynamic strategy produces withdrawal data');
+  assert(resultAuto.yearlyWithdrawals.length > 0, 'Auto strategy produces withdrawal data');
+
+  const year1Dynamic = resultDynamic.yearlyWithdrawals[0];
+  const year1Auto = resultAuto.yearlyWithdrawals[0];
+
+  if (year1Dynamic && year1Auto) {
+    console.log(`  - Auto strategy:    Traditional=$${year1Auto.traditionalWithdrawal.toFixed(0)}, Roth=$${year1Auto.rothWithdrawal.toFixed(0)}, Taxable=$${year1Auto.taxableWithdrawal.toFixed(0)}`);
+    console.log(`  - Dynamic strategy: Traditional=$${year1Dynamic.traditionalWithdrawal.toFixed(0)}, Roth=$${year1Dynamic.rothWithdrawal.toFixed(0)}, Taxable=$${year1Dynamic.taxableWithdrawal.toFixed(0)}`);
+
+    // Both should have positive withdrawals
+    assert(year1Dynamic.totalWithdrawal > 0, 'Dynamic strategy has withdrawals');
+    assert(year1Auto.totalWithdrawal > 0, 'Auto strategy has withdrawals');
+
+    // RMD should be enforced (age 73 with $500k traditional)
+    // RMD divisor at 73 = 26.5, so RMD ≈ $500k / 26.5 ≈ $18,868
+    assert(
+      year1Dynamic.traditionalWithdrawal >= 18000,
+      'Dynamic strategy includes RMD from traditional accounts'
+    );
+
+    assert(
+      year1Auto.traditionalWithdrawal >= 18000,
+      'Auto strategy includes RMD from traditional accounts'
+    );
+
+    console.log(`  - Dynamic total: $${year1Dynamic.totalWithdrawal.toFixed(0)} (tax: $${year1Dynamic.totalTax.toFixed(0)})`);
+    console.log(`  - Auto total: $${year1Auto.totalWithdrawal.toFixed(0)} (tax: $${year1Auto.totalTax.toFixed(0)})`);
+
+    // Key insight: In high-MAGI years (RMD present), dynamic strategy may use different withdrawal mix
+    // to minimize SS torpedo effect and IRMAA exposure
+    assert(
+      year1Dynamic.totalTax <= year1Auto.totalTax * 1.1,
+      'Dynamic strategy tax is comparable to auto (within 10%)'
+    );
+  } else {
+    assert(false, 'Withdrawal year data available');
+  }
+}
+
+// =============================================================================
 // RUN ALL TESTS
 // =============================================================================
 
@@ -1351,6 +1454,7 @@ function runAllTests(): void {
   testPortfolioDepletion();
   testTotalFederalTaxIntegration();
   testCanadianCalculations();
+  testDynamicLowMagiReordering();
 
   console.log('\n' + '='.repeat(60));
   console.log('TEST SUMMARY');
